@@ -1,0 +1,1209 @@
+:root {
+    /* Paleta Deep Space Cyberpunk */
+    --space-black: #05050A;
+    /* Fundo base */
+    --panel-dark: rgba(15, 15, 25, 0.65);
+    /* Fundo glassmorphism */
+    --panel-border: rgba(255, 255, 255, 0.08);
+    /* Borda de vidro */
+
+    /* Cores Neons de Acento */
+    --neon-cyan: #00f0ff;
+    /* Azul elétrico */
+    --neon-magenta: #ff003c;
+    /* Vermelho vibrante (cyberpunk) */
+    --neon-green: #00ff88;
+    /* Verde hacker */
+
+    /* Tipografia e Textos */
+    --text-main: #e0e0e0;
+    --text-muted: #8a8a9e;
+
+    /* Fontes Importadas no HTML */
+    --font-heading: 'Space Grotesk', sans-serif;
+    /* Títulos tecnológicos */
+    --font-body: 'Outfit', sans-serif;
+    /* Leitura moderna */
+}
+
+/* Reset Básico */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html {
+    scroll-behavior: smooth;
+    /* Rolagem suave ao clicar nos links */
+}
+
+body {
+    background-color: var(--space-black);
+    color: var(--text-main);
+    font-family: var(--font-body);
+    line-height: 1.6;
+    overflow-x: hidden;
+}
+
+/* --- Efeitos de Fundo (Espaço Estrelado e Orbes de Luz) --- */
+.stars-bg {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    /* Um truque em CSS para criar pequenos pontos (estrelas) usando gradientes radiais */
+    background-image:
+        radial-gradient(1px 1px at 20px 30px, #ffffff, rgba(0, 0, 0, 0)),
+        radial-gradient(1px 1px at 40px 70px, #ffffff, rgba(0, 0, 0, 0)),
+        radial-gradient(1.5px 1.5px at 90px 40px, #ffffff, rgba(0, 0, 0, 0)),
+        radial-gradient(2.5px 2.5px at 160px 120px, rgba(255, 255, 255, 0.8), rgba(0, 0, 0, 0));
+    background-repeat: repeat;
+    background-size: 250px 250px;
+    opacity: 0.25;
+    z-index: -2;
+}
+
+.glow-orb {
+    position: fixed;
+    border-radius: 50%;
+    filter: blur(120px);
+    z-index: -1;
+    opacity: 0.4;
+}
+
+.orb-1 {
+    top: -15%;
+    right: -10%;
+    width: 500px;
+    height: 500px;
+    background: var(--neon-cyan);
+}
+
+.orb-2 {
+    bottom: -15%;
+    left: -10%;
+    width: 600px;
+    height: 600px;
+    background: var(--neon-magenta);
+    opacity: 0.2;
+}
+
+/* Utilitário de Glassmorphism (Panel Translúcido) */
+.glass-panel {
+    background: var(--panel-dark);
+    backdrop-filter: blur(15px);
+    -webkit-backdrop-filter: blur(15px);
+    border: 1px solid var(--panel-border);
+    border-radius: 16px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+/* Tipografia Comum */
+h1,
+h2,
+h3 {
+    font-family: var(--font-heading);
+    letter-spacing: -0.02em;
+    color: #fff;
+    font-weight: 700;
+}
+
+.text-cyan {
+    color: var(--neon-cyan);
+}
+
+.text-magenta {
+    color: var(--neon-magenta);
+}
+
+.text-green {
+    color: var(--neon-green);
+}
+
+.text-white {
+    color: #fff;
+}
+
+/* Navegação Topo */
+.navbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 5%;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: rgba(5, 5, 10, 0.85);
+    /* Navbar com glass effect */
+    backdrop-filter: blur(15px);
+    border-bottom: 1px solid var(--panel-border);
+}
+
+.logo {
+    font-family: var(--font-heading);
+    font-size: 1.5rem;
+    font-weight: 700;
+    letter-spacing: 2px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: #fff;
+}
+
+.logo-icon {
+    color: var(--neon-cyan);
+    font-size: 1.2rem;
+    text-shadow: 0 0 10px var(--neon-cyan);
+}
+
+.nav-links {
+    list-style: none;
+    display: flex;
+    gap: 30px;
+    align-items: center;
+}
+
+.nav-links a {
+    text-decoration: none;
+    color: var(--text-main);
+    font-weight: 600;
+    font-size: 0.95rem;
+    letter-spacing: 1px;
+    transition: color 0.3s;
+}
+
+.nav-links a:hover {
+    color: var(--neon-cyan);
+}
+
+/* Botões */
+.btn-primary,
+.btn-secondary,
+.btn-primary-sm {
+    display: inline-block;
+    text-decoration: none;
+    font-family: var(--font-heading);
+    text-transform: uppercase;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    border-radius: 4px;
+    transition: all 0.3s ease;
+    cursor: pointer;
+    border: none;
+    text-align: center;
+}
+
+.btn-primary {
+    background: var(--neon-cyan);
+    color: var(--space-black);
+    padding: 16px 32px;
+    font-size: 1rem;
+    box-shadow: 0 0 15px rgba(0, 240, 255, 0.4);
+}
+
+.btn-primary:hover {
+    background: #fff;
+    box-shadow: 0 0 25px rgba(0, 240, 255, 0.7);
+    transform: translateY(-2px);
+}
+
+.btn-secondary {
+    background: transparent;
+    color: #fff;
+    padding: 16px 32px;
+    font-size: 1rem;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.btn-secondary:hover {
+    border-color: var(--neon-cyan);
+    color: var(--neon-cyan);
+    background: rgba(0, 240, 255, 0.05);
+}
+
+.btn-primary-sm {
+    background: var(--neon-cyan);
+    color: var(--space-black) !important;
+    padding: 10px 20px;
+    font-size: 0.8rem;
+}
+
+.btn-primary-sm:hover {
+    background: #fff;
+    box-shadow: 0 0 15px rgba(0, 240, 255, 0.5);
+}
+
+/* Content Limit */
+main {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 40px 20px;
+}
+
+/* --- HERO SECTION --- */
+.hero {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 60px 50px;
+    margin-top: 40px;
+    gap: 40px;
+    position: relative;
+    overflow: hidden;
+}
+
+/* Faixa de laser no topo da Hero */
+.hero::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--neon-cyan), transparent);
+}
+
+.hero-content {
+    flex: 1.2;
+}
+
+.badge {
+    display: inline-block;
+    padding: 5px 15px;
+    border: 1px solid var(--neon-magenta);
+    color: var(--neon-magenta);
+    font-size: 0.8rem;
+    font-family: var(--font-heading);
+    font-weight: 800;
+    letter-spacing: 2px;
+    border-radius: 20px;
+    margin-bottom: 25px;
+    background: rgba(255, 0, 60, 0.05);
+    /* Fundo magenta muito suave */
+}
+
+.hero-content h1 {
+    font-size: 3.8rem;
+    line-height: 1.1;
+    margin-bottom: 25px;
+    text-transform: uppercase;
+}
+
+/* Glitch Effect on Title (CSS Animado Avançado) */
+.glitch-text {
+    position: relative;
+    color: white;
+}
+
+.glitch-text::before,
+.glitch-text::after {
+    content: attr(data-text);
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0.8;
+}
+
+.glitch-text::before {
+    left: 2px;
+    text-shadow: -2px 0 var(--neon-magenta);
+    clip: rect(44px, 450px, 56px, 0);
+    animation: glitch-anim 5s infinite linear alternate-reverse;
+}
+
+.glitch-text::after {
+    left: -2px;
+    text-shadow: -2px 0 var(--neon-cyan);
+    clip: rect(44px, 450px, 56px, 0);
+    animation: glitch-anim2 5s infinite linear alternate-reverse;
+}
+
+@keyframes glitch-anim {
+    0% {
+        clip: rect(21px, 9999px, 86px, 0);
+    }
+
+    20% {
+        clip: rect(6px, 9999px, 14px, 0);
+    }
+
+    40% {
+        clip: rect(35px, 9999px, 80px, 0);
+    }
+
+    60% {
+        clip: rect(100px, 9999px, 20px, 0);
+    }
+
+    80% {
+        clip: rect(40px, 9999px, 93px, 0);
+    }
+
+    100% {
+        clip: rect(80px, 9999px, 4px, 0);
+    }
+}
+
+@keyframes glitch-anim2 {
+    0% {
+        clip: rect(42px, 9999px, 60px, 0);
+    }
+
+    20% {
+        clip: rect(70px, 9999px, 16px, 0);
+    }
+
+    40% {
+        clip: rect(12px, 9999px, 40px, 0);
+    }
+
+    60% {
+        clip: rect(80px, 9999px, 90px, 0);
+    }
+
+    80% {
+        clip: rect(6px, 9999px, 45px, 0);
+    }
+
+    100% {
+        clip: rect(55px, 9999px, 2px, 0);
+    }
+}
+
+.hero-content p {
+    font-size: 1.25rem;
+    color: var(--text-muted);
+    margin-bottom: 40px;
+    max-width: 95%;
+}
+
+.hero-actions {
+    display: flex;
+    gap: 20px;
+}
+
+/* Hologram Visual (Planet) */
+.hero-visual {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    position: relative;
+    perspective: 1000px;
+}
+
+.hologram-planet {
+    width: 350px;
+    height: 350px;
+    position: relative;
+    transform-style: preserve-3d;
+    animation: float 6s ease-in-out infinite;
+}
+
+@keyframes float {
+
+    0%,
+    100% {
+        transform: translateY(0px);
+    }
+
+    50% {
+        transform: translateY(-20px);
+    }
+}
+
+/* O Planeta Central (Estilo Marte) */
+.planet-core {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    border: none;
+    box-shadow:
+        inset -35px -35px 50px rgba(0, 0, 0, 0.9),
+        inset 15px 15px 30px rgba(255, 180, 150, 0.3),
+        inset -5px -5px 15px rgba(255, 87, 34, 0.3),
+        0 0 45px rgba(255, 60, 20, 0.35);
+    /* Aura marciana / Atmosfera */
+    background:
+        radial-gradient(circle at 35% 65%, rgba(60, 20, 0, 0.6) 0%, transparent 20%),
+        radial-gradient(circle at 75% 35%, rgba(60, 20, 0, 0.5) 0%, transparent 18%),
+        radial-gradient(circle at 20% 25%, rgba(60, 20, 0, 0.4) 0%, transparent 12%),
+        radial-gradient(circle at 50% 50%, #e0633b 0%, #bd3e1a 40%, #7a2208 80%, #290a02 100%);
+    background-size: 250% 200%;
+    animation: rotate-core 40s linear infinite;
+}
+
+@keyframes rotate-core {
+    0% {
+        background-position: 0% 50%;
+    }
+
+    100% {
+        background-position: 150% 50%;
+    }
+}
+
+/* Equador do planeta (Anéis) */
+.planet-ring {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 140%;
+    height: 140%;
+    border-radius: 50%;
+    border: 3px solid rgba(255, 0, 60, 0.1);
+    border-left-color: var(--neon-magenta);
+    border-bottom-color: var(--neon-magenta);
+    transform: translate(-50%, -50%) rotateX(70deg);
+    animation: rotate-ring 15s linear infinite;
+}
+
+.vertical-ring {
+    width: 120%;
+    height: 120%;
+    border-color: rgba(0, 240, 255, 0.1);
+    border-top-color: var(--neon-cyan);
+    border-right-color: var(--neon-cyan);
+    transform: translate(-50%, -50%) rotateY(70deg) rotateZ(45deg);
+    animation: rotate-ring-b 20s linear infinite;
+}
+
+@keyframes rotate-ring {
+    0% {
+        transform: translate(-50%, -50%) rotateX(70deg) rotateZ(0deg);
+    }
+
+    100% {
+        transform: translate(-50%, -50%) rotateX(70deg) rotateZ(360deg);
+    }
+}
+
+@keyframes rotate-ring-b {
+    0% {
+        transform: translate(-50%, -50%) rotateY(70deg) rotateX(45deg) rotateZ(0deg);
+    }
+
+    100% {
+        transform: translate(-50%, -50%) rotateY(70deg) rotateX(45deg) rotateZ(360deg);
+    }
+}
+
+
+/* --- SEÇÕES COMUNS --- */
+.mission-section,
+.roadmap-section,
+.cta-section {
+    margin-top: 120px;
+}
+
+.section-header {
+    margin-bottom: 50px;
+}
+
+.section-header.center {
+    text-align: center;
+}
+
+.section-header h2 {
+    font-size: 2.5rem;
+    margin-bottom: 10px;
+}
+
+.section-header p {
+    color: var(--text-muted);
+    font-size: 1.1rem;
+}
+
+.line-accent {
+    width: 60px;
+    height: 4px;
+    background: var(--neon-magenta);
+    margin-top: 15px;
+    border-radius: 2px;
+}
+
+/* Grids de Informação */
+.cards-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 30px;
+}
+
+.feature-card {
+    padding: 40px 30px;
+    transition: transform 0.4s ease, border-color 0.4s ease, box-shadow 0.4s ease;
+}
+
+.feature-card:hover {
+    transform: translateY(-10px);
+    border-color: rgba(0, 240, 255, 0.5);
+    box-shadow: 0 15px 40px rgba(0, 240, 255, 0.1);
+}
+
+.card-icon {
+    font-size: 3rem;
+    margin-bottom: 25px;
+    line-height: 1;
+}
+
+.cyan-glow {
+    color: var(--neon-cyan);
+    text-shadow: 0 0 15px rgba(0, 240, 255, 0.7);
+}
+
+.magenta-glow {
+    color: var(--neon-magenta);
+    text-shadow: 0 0 15px rgba(255, 0, 60, 0.7);
+}
+
+.green-glow {
+    color: var(--neon-green);
+    text-shadow: 0 0 15px rgba(0, 255, 136, 0.7);
+}
+
+.feature-card h3 {
+    font-size: 1.4rem;
+    margin-bottom: 15px;
+}
+
+.feature-card p {
+    color: var(--text-muted);
+    font-size: 1.05rem;
+}
+
+/* --- ESTÁGIOS (TIMELINE) --- */
+.timeline {
+    display: flex;
+    flex-direction: column;
+    gap: 25px;
+}
+
+.phase-item {
+    display: flex;
+    align-items: center;
+    padding: 35px 50px;
+    gap: 40px;
+    transition: border-color 0.3s, background 0.3s;
+    border-left: 5px solid var(--panel-border);
+}
+
+.phase-item:hover {
+    border-left-color: var(--neon-cyan);
+    background: rgba(30, 30, 45, 0.85);
+}
+
+/* Mudando borda com base no hover individual das Fases */
+.phase-item:nth-child(2):hover {
+    border-left-color: var(--neon-cyan);
+}
+
+.phase-item:nth-child(3):hover {
+    border-left-color: var(--neon-magenta);
+}
+
+.phase-item:nth-child(4):hover {
+    border-left-color: var(--neon-green);
+}
+
+.phase-number {
+    font-family: var(--font-heading);
+    font-size: 4rem;
+    font-weight: 800;
+    opacity: 0.9;
+    line-height: 1;
+}
+
+.phase-info h3 {
+    font-size: 1.6rem;
+    margin-bottom: 8px;
+}
+
+.phase-info p {
+    color: var(--text-muted);
+    font-size: 1.1rem;
+}
+
+/* --- PAINEL DE COMANDO (Dashboard) --- */
+.control-panel-section {
+    margin-top: 120px;
+}
+
+.panel-layout {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 30px;
+}
+
+.panel-header {
+    padding: 15px 25px;
+    border-bottom: 1px solid var(--panel-border);
+    font-family: var(--font-heading);
+    font-weight: 700;
+    font-size: 0.95rem;
+    letter-spacing: 1px;
+    background: rgba(0, 0, 0, 0.4);
+    border-radius: 16px 16px 0 0;
+}
+
+.panel-left,
+.panel-right {
+    min-height: 500px;
+}
+
+/* Coluna Esquerda: Mini Marte */
+.colony-simulation {
+    padding: 30px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 30px;
+}
+
+.colony-cam-feed {
+    width: 100%;
+    height: 250px;
+    position: relative;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid var(--panel-border);
+    box-shadow: 0 0 20px rgba(0, 240, 255, 0.1);
+}
+
+.colony-cam-feed img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    filter: brightness(0.85) contrast(1.1) grayscale(0.2);
+    /* Tom estético das câmeras do jogo */
+    transition: transform 0.5s ease;
+}
+
+.colony-cam-feed:hover img {
+    transform: scale(1.05);
+    /* Zoom sutil de vigilância */
+}
+
+/* Efeito de Scanner de Segurança na imagem */
+.colony-cam-feed::after {
+    content: '';
+    position: absolute;
+    top: -100%;
+    left: 0;
+    width: 100%;
+    height: 30%;
+    background: linear-gradient(to bottom, transparent, rgba(0, 240, 255, 0.4), transparent);
+    animation: scanline 4s linear infinite;
+    pointer-events: none;
+}
+
+@keyframes scanline {
+    0% {
+        top: -30%;
+    }
+
+    100% {
+        top: 100%;
+    }
+}
+
+/* Retículas de Foco nos cantos */
+.reticle {
+    position: absolute;
+    width: 25px;
+    height: 25px;
+    border: 2px solid var(--neon-cyan);
+    pointer-events: none;
+    z-index: 2;
+    opacity: 0.6;
+}
+
+.reticle-tl {
+    top: 10px;
+    left: 10px;
+    border-right: none;
+    border-bottom: none;
+}
+
+.reticle-tr {
+    top: 10px;
+    right: 10px;
+    border-left: none;
+    border-bottom: none;
+}
+
+.reticle-bl {
+    bottom: 10px;
+    left: 10px;
+    border-right: none;
+    border-top: none;
+}
+
+.reticle-br {
+    bottom: 10px;
+    right: 10px;
+    border-left: none;
+    border-top: none;
+}
+
+.cam-overlay-text {
+    position: absolute;
+    top: 5px;
+    left: 5px;
+    font-family: 'Space Grotesk', monospace;
+    font-size: 0.7rem;
+    color: var(--neon-cyan);
+    z-index: 2;
+    background: rgba(0, 0, 0, 0.6);
+    padding: 2px 5px;
+    border-radius: 2px;
+}
+
+.colony-stats {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    background: rgba(0, 0, 0, 0.4);
+    padding: 20px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.stat-line {
+    display: flex;
+    justify-content: space-between;
+    font-family: var(--font-heading);
+    font-weight: 600;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+}
+
+.stat-line span {
+    color: #fff;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.mini-bar {
+    width: 50px;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 2px;
+}
+
+.mini-bar div {
+    height: 100%;
+    border-radius: 2px;
+}
+
+/* Coluna Direita: Dashboard Financeiro */
+.financial-dashboard {
+    padding: 30px;
+    display: flex;
+    flex-direction: column;
+    gap: 25px;
+}
+
+.dashboard-row {
+    display: flex;
+    gap: 20px;
+}
+
+.data-card {
+    flex: 1;
+    background: rgba(0, 0, 0, 0.5);
+    padding: 20px;
+    border-radius: 8px;
+    border: 1px solid var(--panel-border);
+}
+
+.data-card h4 {
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    margin-bottom: 10px;
+}
+
+.data-card .value {
+    font-size: 2rem;
+    font-family: var(--font-heading);
+    font-weight: 700;
+    color: #fff;
+    line-height: 1;
+    margin-bottom: 5px;
+}
+
+.data-card .trend {
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.trend.up {
+    color: var(--neon-green);
+}
+
+.trend.down {
+    color: var(--neon-magenta);
+}
+
+/* Gráfico CSS Simulado */
+.chart-container {
+    background: rgba(0, 0, 0, 0.5);
+    padding: 20px;
+    border-radius: 8px;
+    border: 1px solid var(--panel-border);
+}
+
+.chart-container h4 {
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    margin-bottom: 15px;
+}
+
+.css-chart {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    height: 120px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.bar-group {
+    display: flex;
+    gap: 5px;
+    align-items: flex-end;
+    flex: 1;
+    justify-content: center;
+    height: 100%;
+}
+
+.bar {
+    width: 15px;
+    border-radius: 3px 3px 0 0;
+}
+
+.bar-income {
+    background: var(--neon-cyan);
+    box-shadow: 0 0 10px rgba(0, 240, 255, 0.3);
+}
+
+.bar-expense {
+    background: var(--neon-magenta);
+    opacity: 0.7;
+}
+
+.chart-legend {
+    display: flex;
+    gap: 15px;
+    margin-top: 15px;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.chart-legend span {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.dot-income {
+    width: 8px;
+    height: 8px;
+    background: var(--neon-cyan);
+    border-radius: 50%;
+}
+
+.dot-expense {
+    width: 8px;
+    height: 8px;
+    background: var(--neon-magenta);
+    border-radius: 50%;
+}
+
+/* News Feed Terminal */
+.news-feed {
+    background: rgba(0, 0, 0, 0.5);
+    padding: 20px;
+    border-radius: 8px;
+    border: 1px solid var(--panel-border);
+}
+
+.news-feed h4 {
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    margin-bottom: 15px;
+    font-family: var(--font-heading);
+}
+
+.news-feed ul {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.news-feed li {
+    font-family: 'Space Grotesk', monospace;
+    /* Fonte mais parecida com terminal */
+    font-size: 0.85rem;
+    color: #ccc;
+    padding-bottom: 10px;
+    border-bottom: 1px dashed rgba(255, 255, 255, 0.1);
+    line-height: 1.4;
+}
+
+.news-feed li:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+.news-feed .time {
+    color: var(--text-muted);
+    margin-right: 5px;
+}
+
+/* --- CTA SECTION (Form de Terminal) --- */
+.cta-section {
+    padding: 80px 40px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+}
+
+/* Efeito luminoso de fundo no CTA */
+.cta-section::after {
+    content: '';
+    position: absolute;
+    bottom: -50px;
+    right: 0;
+    width: 300px;
+    height: 300px;
+    background: radial-gradient(circle, rgba(0, 255, 136, 0.15), transparent 70%);
+}
+
+.cta-section::before {
+    content: '';
+    position: absolute;
+    top: -50px;
+    left: 0;
+    width: 300px;
+    height: 300px;
+    background: radial-gradient(circle, rgba(0, 240, 255, 0.1), transparent 70%);
+}
+
+.cta-content {
+    position: relative;
+    z-index: 2;
+}
+
+.cta-content h2 {
+    font-size: 3rem;
+    margin-bottom: 20px;
+}
+
+.cta-content p {
+    font-size: 1.25rem;
+    color: var(--text-muted);
+    max-width: 750px;
+    margin: 0 auto 40px;
+}
+
+.terminal-form {
+    max-width: 600px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.input-group {
+    display: flex;
+    align-items: center;
+    background: rgba(0, 0, 0, 0.6);
+    border: 1px solid var(--panel-border);
+    border-radius: 6px;
+    padding: 15px 25px;
+    transition: border-color 0.3s, box-shadow 0.3s;
+}
+
+.input-group:focus-within {
+    border-color: var(--neon-green);
+    box-shadow: 0 0 15px rgba(0, 255, 136, 0.2);
+}
+
+.prefix {
+    color: var(--neon-green);
+    font-family: var(--font-heading);
+    margin-right: 15px;
+    font-weight: bold;
+    font-size: 1.2rem;
+}
+
+.terminal-form input {
+    background: transparent;
+    border: none;
+    color: #fff;
+    font-family: var(--font-body);
+    font-size: 1.1rem;
+    width: 100%;
+    outline: none;
+    letter-spacing: 1px;
+}
+
+.terminal-form input::placeholder {
+    color: rgba(255, 255, 255, 0.3);
+}
+
+.glow-button {
+    background: var(--neon-cyan);
+    color: #000;
+    width: 100%;
+    /* Ocupa largura da div pai */
+    padding: 18px;
+    font-size: 1.1rem;
+}
+
+.hidden {
+    display: none;
+}
+
+.mt-4 {
+    margin-top: 25px;
+    font-family: var(--font-heading);
+    letter-spacing: 2px;
+    font-size: 1.1rem;
+    font-weight: 700;
+}
+
+/* --- FOOTER --- */
+footer {
+    margin-top: 100px;
+    border-top: 1px solid var(--panel-border);
+    padding: 40px 20px;
+    background: rgba(5, 5, 10, 0.9);
+}
+
+.footer-content {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.footer-content p {
+    color: var(--text-muted);
+    font-size: 0.95rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.status-indicator {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.85rem;
+    letter-spacing: 1.5px;
+    color: var(--text-muted);
+    font-family: var(--font-heading);
+}
+
+.dot {
+    width: 10px;
+    height: 10px;
+    background: var(--neon-green);
+    border-radius: 50%;
+    box-shadow: 0 0 10px var(--neon-green);
+    animation: blink 2s infinite;
+}
+
+@keyframes blink {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.3;
+    }
+}
+
+/* Resp. Mobile Ajustes */
+@media (max-width: 1024px) {
+    .hero {
+        flex-direction: column;
+        text-align: center;
+        padding: 40px 20px;
+    }
+
+    .hero::before {
+        display: none;
+    }
+
+    .hero-content h1 {
+        font-size: 3rem;
+    }
+
+    .hero-content p {
+        margin: 0 auto 30px;
+    }
+
+    .hero-actions {
+        justify-content: center;
+    }
+
+    .cards-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .panel-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .phase-item {
+        flex-direction: column;
+        text-align: center;
+        gap: 20px;
+    }
+
+    .phase-item {
+        border-left: none;
+        border-top: 4px solid var(--panel-border);
+    }
+
+    .phase-item:hover {
+        border-top-color: var(--neon-cyan);
+    }
+
+    .hologram-planet {
+        width: 280px;
+        height: 280px;
+        margin-top: 30px;
+    }
+}
+
+@media (max-width: 768px) {
+    .nav-links {
+        display: none;
+    }
+
+    /* Oculto p/ simplificar, em dev usaríamos Menu Hamburger */
+    .hero-actions {
+        flex-direction: column;
+    }
+
+    .footer-content {
+        flex-direction: column;
+        gap: 20px;
+        text-align: center;
+    }
+
+    .cta-content h2 {
+        font-size: 2.2rem;
+    }
+}
