@@ -1,0 +1,459 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Core ─────────────────────────────────────────────────────────────────────
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      String   @default("VISUALIZACAO")
+  active    Boolean  @default(true)
+  avatarUrl String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  teacher             Teacher?
+  pedagogicalRecords  PedagogicalRecord[] @relation("RecordedBy")
+  classRecords        ClassRecord[]
+  gradeRecords        GradeRecord[]
+  auditLogs           AuditLog[]
+
+  @@map("users")
+}
+
+model School {
+  id        String   @id @default(cuid())
+  name      String
+  address   String?
+  phone     String?
+  email     String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  classes Class[]
+
+  @@map("schools")
+}
+
+model Segment {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+
+  grades   Grade[]
+  subjects Subject[]
+
+  @@map("segments")
+}
+
+model Grade {
+  id        String   @id @default(cuid())
+  name      String
+  segmentId String
+  createdAt DateTime @default(now())
+
+  segment Segment @relation(fields: [segmentId], references: [id])
+  classes Class[]
+
+  @@map("grades")
+}
+
+model Subject {
+  id        String  @id @default(cuid())
+  name      String
+  segmentId String?
+  active    Boolean @default(true)
+  createdAt DateTime @default(now())
+
+  segment         Segment?         @relation(fields: [segmentId], references: [id])
+  teacherSubjects TeacherSubject[]
+  teacherClasses  TeacherClass[]
+  lessons         Lesson[]
+  assessments     Assessment[]
+  homework        Homework[]
+  classRecords    ClassRecord[]
+
+  @@map("subjects")
+}
+
+// ─── Class ────────────────────────────────────────────────────────────────────
+
+model Class {
+  id         String   @id @default(cuid())
+  name       String
+  curriculum String?
+  gradeId    String?
+  period     String?
+  schoolId   String?
+  shift      String?
+  active     Boolean  @default(true)
+  year       Int      @default(2024)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  grade          Grade?         @relation(fields: [gradeId], references: [id])
+  school         School?        @relation(fields: [schoolId], references: [id])
+  teacherClasses TeacherClass[]
+  students       Student[]
+  lessonClasses  LessonClass[]
+  classRecords   ClassRecord[]
+  assessments    Assessment[]
+  homework       Homework[]
+
+  @@map("classes")
+}
+
+// ─── Teacher ──────────────────────────────────────────────────────────────────
+
+model Teacher {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  registration String?  @unique
+  bio          String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  teacherSubjects TeacherSubject[]
+  teacherClasses  TeacherClass[]
+  classRecords    ClassRecord[]
+  gradeRecords    GradeRecord[]
+
+  @@map("teachers")
+}
+
+model TeacherSubject {
+  teacherId String
+  subjectId String
+
+  teacher Teacher @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  subject Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+  @@id([teacherId, subjectId])
+  @@map("teacher_subjects")
+}
+
+model TeacherClass {
+  id        String   @id @default(cuid())
+  teacherId String
+  classId   String
+  subjectId String
+  createdAt DateTime @default(now())
+
+  teacher Teacher @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  class   Class   @relation(fields: [classId], references: [id], onDelete: Cascade)
+  subject Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+  @@unique([teacherId, classId, subjectId])
+  @@map("teacher_classes")
+}
+
+// ─── Student ──────────────────────────────────────────────────────────────────
+
+model Student {
+  id           String   @id @default(cuid())
+  name         String
+  enrollment   String   @unique
+  birthDate    DateTime?
+  cpf          String?  @unique
+  rg           String?
+  email        String?
+  phone        String?
+  address      String?
+  city         String?
+  state        String?
+  zipCode      String?
+  photoUrl     String?
+  classId      String?
+  status       String   @default("ATIVO")
+  observations String?
+  medicalInfo  String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  class              Class?              @relation(fields: [classId], references: [id])
+  guardians          StudentGuardian[]
+  gradeRecords       GradeRecord[]
+  homeworkSubmissions HomeworkSubmission[]
+  waygroundSyncs     WaygroundSync[]
+  pedagogicalRecords PedagogicalRecord[]
+  academicHistory    AcademicHistory[]
+
+  @@map("students")
+}
+
+model StudentGuardian {
+  id           String   @id @default(cuid())
+  studentId    String
+  name         String
+  relationship String
+  phone        String?
+  email        String?
+  isPrimary    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@map("student_guardians")
+}
+
+model AcademicHistory {
+  id           String   @id @default(cuid())
+  studentId    String
+  year         Int
+  className    String?
+  schoolName   String?
+  observations String?
+  createdAt    DateTime @default(now())
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@map("academic_history")
+}
+
+// ─── Lesson ───────────────────────────────────────────────────────────────────
+
+model Lesson {
+  id          String    @id @default(cuid())
+  title       String
+  description String?
+  subjectId   String?
+  startDate   DateTime?
+  endDate     DateTime?
+  createdById String?
+  active      Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  subject       Subject?        @relation(fields: [subjectId], references: [id])
+  lessonClasses LessonClass[]
+  materials     LessonMaterial[]
+  classRecords  ClassRecord[]
+  homework      Homework[]
+
+  @@map("lessons")
+}
+
+model LessonClass {
+  lessonId String
+  classId  String
+
+  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  class  Class  @relation(fields: [classId], references: [id], onDelete: Cascade)
+
+  @@id([lessonId, classId])
+  @@map("lesson_classes")
+}
+
+model LessonMaterial {
+  id          String   @id @default(cuid())
+  lessonId    String
+  type        String   @default("LINK")
+  title       String
+  url         String?
+  filePath    String?
+  description String?
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@map("lesson_materials")
+}
+
+// ─── Class Record (Diário de Classe) ─────────────────────────────────────────
+
+model ClassRecord {
+  id               String   @id @default(cuid())
+  lessonId         String?
+  classId          String
+  teacherId        String
+  subjectId        String?
+  userId           String
+  date             DateTime
+  contentDeveloped String
+  observations     String?
+  pending          String?
+  adaptations      String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  lesson  Lesson?  @relation(fields: [lessonId], references: [id])
+  class   Class    @relation(fields: [classId], references: [id])
+  teacher Teacher  @relation(fields: [teacherId], references: [id])
+  subject Subject? @relation(fields: [subjectId], references: [id])
+  user    User     @relation(fields: [userId], references: [id])
+
+  @@map("class_records")
+}
+
+// ─── Homework ─────────────────────────────────────────────────────────────────
+
+model Homework {
+  id           String    @id @default(cuid())
+  title        String
+  instructions String?
+  lessonId     String?
+  classId      String
+  subjectId    String
+  dueDate      DateTime?
+  externalId   String?
+  active       Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  lesson      Lesson?              @relation(fields: [lessonId], references: [id])
+  class       Class                @relation(fields: [classId], references: [id])
+  subject     Subject              @relation(fields: [subjectId], references: [id])
+  materials   HomeworkMaterial[]
+  submissions HomeworkSubmission[]
+  waygroundSyncs WaygroundSync[]
+
+  @@map("homework")
+}
+
+model HomeworkMaterial {
+  id         String   @id @default(cuid())
+  homeworkId String
+  type       String   @default("LINK")
+  title      String
+  url        String?
+  createdAt  DateTime @default(now())
+
+  homework Homework @relation(fields: [homeworkId], references: [id], onDelete: Cascade)
+
+  @@map("homework_materials")
+}
+
+model HomeworkSubmission {
+  id              String   @id @default(cuid())
+  homeworkId      String
+  studentId       String
+  submittedAt     DateTime?
+  waygroundStatus String   @default("PENDENTE")
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  homework Homework @relation(fields: [homeworkId], references: [id])
+  student  Student  @relation(fields: [studentId], references: [id])
+
+  @@unique([homeworkId, studentId])
+  @@map("homework_submissions")
+}
+
+// ─── Wayground Integration ────────────────────────────────────────────────────
+
+model WaygroundSync {
+  id             String    @id @default(cuid())
+  homeworkId     String
+  studentId      String
+  externalTaskId String?
+  status         String    @default("PENDENTE")
+  sentDate       DateTime?
+  completionDate DateTime?
+  result         String?
+  syncedAt       DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  homework Homework @relation(fields: [homeworkId], references: [id])
+  student  Student  @relation(fields: [studentId], references: [id])
+
+  @@unique([homeworkId, studentId])
+  @@map("wayground_syncs")
+}
+
+// ─── Assessment & Grades ──────────────────────────────────────────────────────
+
+model Assessment {
+  id        String   @id @default(cuid())
+  name      String
+  subjectId String
+  classId   String
+  period    String?
+  weight    Float    @default(1.0)
+  type      String   @default("PROVA")
+  date      DateTime?
+  criteria  String?
+  maxScore  Float    @default(10.0)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  subject      Subject       @relation(fields: [subjectId], references: [id])
+  class        Class         @relation(fields: [classId], references: [id])
+  gradeRecords GradeRecord[]
+
+  @@map("assessments")
+}
+
+model GradeRecord {
+  id           String   @id @default(cuid())
+  assessmentId String
+  studentId    String
+  teacherId    String
+  userId       String
+  score        Float?
+  observations String?
+  launchedAt   DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  assessment Assessment @relation(fields: [assessmentId], references: [id])
+  student    Student    @relation(fields: [studentId], references: [id])
+  teacher    Teacher    @relation(fields: [teacherId], references: [id])
+  user       User       @relation(fields: [userId], references: [id])
+
+  @@unique([assessmentId, studentId])
+  @@map("grade_records")
+}
+
+// ─── Pedagogical Records ──────────────────────────────────────────────────────
+
+model PedagogicalRecord {
+  id              String   @id @default(cuid())
+  studentId       String
+  pedagogueId     String
+  type            String   @default("OBSERVACAO")
+  title           String
+  content         String
+  date            DateTime @default(now())
+  confidentiality String   @default("RESTRITO")
+  actionPlan      String?
+  resolved        Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  student   Student @relation(fields: [studentId], references: [id])
+  pedagogue User    @relation("RecordedBy", fields: [pedagogueId], references: [id])
+
+  @@map("pedagogical_records")
+}
+
+// ─── Audit Log ────────────────────────────────────────────────────────────────
+
+model AuditLog {
+  id           String   @id @default(cuid())
+  userId       String?
+  action       String   @default("CREATE")
+  entityType   String
+  entityId     String?
+  previousData String?
+  newData      String?
+  ipAddress    String?
+  userAgent    String?
+  createdAt    DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@map("audit_logs")
+}
