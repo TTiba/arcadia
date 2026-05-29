@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils'
 import {
   GraduationCap, LayoutDashboard, Users, BookOpen, School,
   ClipboardList, FileText, CheckSquare, Star, Heart,
-  LogOut, ChevronLeft, ChevronRight, Menu, Settings, UserCheck
+  LogOut, ChevronLeft, ChevronRight, Menu, Settings, UserCheck, Sparkles
 } from 'lucide-react'
 import { Button } from './ui/button'
 import { Avatar, AvatarFallback } from './ui/avatar'
@@ -37,6 +37,8 @@ const navItems: NavItem[] = [
   { href: '/pedagogo/registros', label: 'Registros Pedagógicos', icon: Heart, roles: ['PEDAGOGO', 'COORDENACAO'] },
   // Shared
   { href: '/admin/alunos', label: 'Alunos', icon: UserCheck, roles: ['PEDAGOGO'] },
+  // AI
+  { href: '/ai/assistente', label: 'Assistente IA', icon: Sparkles },
 ]
 
 export function Sidebar() {

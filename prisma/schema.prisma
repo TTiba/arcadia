@@ -184,9 +184,11 @@ model Student {
   guardians          StudentGuardian[]
   gradeRecords       GradeRecord[]
   homeworkSubmissions HomeworkSubmission[]
-  waygroundSyncs     WaygroundSync[]
-  pedagogicalRecords PedagogicalRecord[]
-  academicHistory    AcademicHistory[]
+  waygroundSyncs         WaygroundSync[]
+  pedagogicalRecords     PedagogicalRecord[]
+  academicHistory        AcademicHistory[]
+  saebPerformances       StudentSaebPerformance[]
+  enemPerformances       StudentEnemPerformance[]
 
   @@map("students")
 }
@@ -437,6 +439,65 @@ model PedagogicalRecord {
   pedagogue User    @relation("RecordedBy", fields: [pedagogueId], references: [id])
 
   @@map("pedagogical_records")
+}
+
+// ─── SAEB / ENEM Performance ──────────────────────────────────────────────────
+
+model SaebDescriptor {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  description String
+  area        String
+  level       String
+  createdAt   DateTime @default(now())
+
+  performances StudentSaebPerformance[]
+
+  @@map("saeb_descriptors")
+}
+
+model EnemCompetency {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  description String
+  area        String
+  type        String   @default("HABILIDADE")
+  createdAt   DateTime @default(now())
+
+  performances StudentEnemPerformance[]
+
+  @@map("enem_competencies")
+}
+
+model StudentSaebPerformance {
+  id           String   @id @default(cuid())
+  studentId    String
+  descriptorId String
+  score        Float
+  level        String   @default("BASICO")
+  year         Int      @default(2024)
+  createdAt    DateTime @default(now())
+
+  student    Student        @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  descriptor SaebDescriptor @relation(fields: [descriptorId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, descriptorId, year])
+  @@map("student_saeb_performances")
+}
+
+model StudentEnemPerformance {
+  id           String   @id @default(cuid())
+  studentId    String
+  competencyId String
+  score        Float
+  year         Int      @default(2024)
+  createdAt    DateTime @default(now())
+
+  student    Student        @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  competency EnemCompetency @relation(fields: [competencyId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, competencyId, year])
+  @@map("student_enem_performances")
 }
 
 // ─── Audit Log ────────────────────────────────────────────────────────────────
