@@ -21,6 +21,8 @@ async function main() {
   await prisma.lesson.deleteMany()
   await prisma.academicHistory.deleteMany()
   await prisma.studentGuardian.deleteMany()
+  await prisma.studentSaebPerformance.deleteMany()
+  await prisma.studentEnemPerformance.deleteMany()
   await prisma.student.deleteMany()
   await prisma.teacherClass.deleteMany()
   await prisma.teacherSubject.deleteMany()
@@ -31,6 +33,8 @@ async function main() {
   await prisma.grade.deleteMany()
   await prisma.segment.deleteMany()
   await prisma.school.deleteMany()
+  await prisma.saebDescriptor.deleteMany()
+  await prisma.enemCompetency.deleteMany()
 
   // School
   const school = await prisma.school.create({
@@ -325,6 +329,109 @@ async function main() {
       { studentId: students9B[4].id, pedagogueId: pedagogoUser.id, type: 'ADVERTENCIA', title: 'Advertência verbal - Comportamento', content: 'Aluno recebeu advertência verbal por comportamento inadequado durante aula de Ciências.', date: new Date(2024, 3, 8), confidentiality: 'RESTRITO' },
     ]
   })
+
+  // ─── SAEB Descriptors ────────────────────────────────────────────────────────
+  const saebPortugues = await Promise.all([
+    prisma.saebDescriptor.create({ data: { code: 'LP-D1', description: 'Localizar informações explícitas em um texto', area: 'Língua Portuguesa', level: '5º Ano' } }),
+    prisma.saebDescriptor.create({ data: { code: 'LP-D3', description: 'Inferir o sentido de uma palavra ou expressão', area: 'Língua Portuguesa', level: '5º Ano' } }),
+    prisma.saebDescriptor.create({ data: { code: 'LP-D4', description: 'Inferir uma informação implícita em um texto', area: 'Língua Portuguesa', level: '5º Ano' } }),
+    prisma.saebDescriptor.create({ data: { code: 'LP-D6', description: 'Identificar o tema de um texto', area: 'Língua Portuguesa', level: '5º Ano' } }),
+    prisma.saebDescriptor.create({ data: { code: 'LP-D11', description: 'Identificar o conflito gerador do enredo e os elementos que constroem a narrativa', area: 'Língua Portuguesa', level: '5º Ano' } }),
+    prisma.saebDescriptor.create({ data: { code: 'LP-D13', description: 'Distinguir um fato da opinião relativa a esse fato', area: 'Língua Portuguesa', level: '5º Ano' } }),
+  ])
+
+  const saebMatematica = await Promise.all([
+    prisma.saebDescriptor.create({ data: { code: 'MT-D3', description: 'Resolver problemas com números naturais envolvendo operações', area: 'Matemática', level: '5º Ano' } }),
+    prisma.saebDescriptor.create({ data: { code: 'MT-D7', description: 'Calcular a porcentagem de um número', area: 'Matemática', level: '5º Ano' } }),
+    prisma.saebDescriptor.create({ data: { code: 'MT-D14', description: 'Resolver problemas envolvendo medidas de comprimento', area: 'Matemática', level: '5º Ano' } }),
+    prisma.saebDescriptor.create({ data: { code: 'MT-D17', description: 'Resolver problemas envolvendo cálculo de área de figuras planas', area: 'Matemática', level: '5º Ano' } }),
+    prisma.saebDescriptor.create({ data: { code: 'MT-D27', description: 'Analisar informações expressas em gráficos ou tabelas', area: 'Matemática', level: '5º Ano' } }),
+  ])
+
+  // ─── ENEM Competencies ───────────────────────────────────────────────────────
+  const enemMT = await Promise.all([
+    prisma.enemCompetency.create({ data: { code: 'MT-C1', description: 'Construir significados para os números naturais, inteiros, racionais e reais', area: 'Matemática e suas Tecnologias', type: 'COMPETENCIA' } }),
+    prisma.enemCompetency.create({ data: { code: 'MT-C2', description: 'Utilizar o conhecimento geométrico para leitura e representação da realidade', area: 'Matemática e suas Tecnologias', type: 'COMPETENCIA' } }),
+    prisma.enemCompetency.create({ data: { code: 'MT-C3', description: 'Construir noções de grandezas e medidas para a compreensão da realidade', area: 'Matemática e suas Tecnologias', type: 'COMPETENCIA' } }),
+    prisma.enemCompetency.create({ data: { code: 'MT-C4', description: 'Construir estruturas de pensamento para análise das relações quantitativas da realidade', area: 'Matemática e suas Tecnologias', type: 'COMPETENCIA' } }),
+    prisma.enemCompetency.create({ data: { code: 'MT-C5', description: 'Construir o raciocínio lógico e a capacidade de produzir argumentos convincentes', area: 'Matemática e suas Tecnologias', type: 'COMPETENCIA' } }),
+  ])
+
+  const enemLC = await Promise.all([
+    prisma.enemCompetency.create({ data: { code: 'LC-C1', description: 'Aplicar as tecnologias da comunicação e da informação na escola, no trabalho e em outros contextos', area: 'Linguagens, Códigos e suas Tecnologias', type: 'COMPETENCIA' } }),
+    prisma.enemCompetency.create({ data: { code: 'LC-C5', description: 'Analisar, interpretar e aplicar recursos expressivos das linguagens, relacionando textos com seus contextos', area: 'Linguagens, Códigos e suas Tecnologias', type: 'COMPETENCIA' } }),
+    prisma.enemCompetency.create({ data: { code: 'LC-C7', description: 'Confrontar opiniões e pontos de vista sobre as diferentes linguagens e seus contextos', area: 'Linguagens, Códigos e suas Tecnologias', type: 'COMPETENCIA' } }),
+  ])
+
+  const enemCN = await Promise.all([
+    prisma.enemCompetency.create({ data: { code: 'CN-C1', description: 'Compreender as ciências naturais e tecnologias como construções humanas históricas', area: 'Ciências da Natureza e suas Tecnologias', type: 'COMPETENCIA' } }),
+    prisma.enemCompetency.create({ data: { code: 'CN-C3', description: 'Associar intervenções que resultam em degradação ou conservação ambiental', area: 'Ciências da Natureza e suas Tecnologias', type: 'COMPETENCIA' } }),
+    prisma.enemCompetency.create({ data: { code: 'CN-C4', description: 'Compreender interações entre organismos e ambiente, em particular as relacionadas à saúde humana', area: 'Ciências da Natureza e suas Tecnologias', type: 'COMPETENCIA' } }),
+  ])
+
+  // ─── Student SAEB Performance (5º Ano A) ─────────────────────────────────────
+  // Scores: 0-10 scale. Level: ADEQUADO (>=7), BASICO (5-6.9), ABAIXO_BASICO (<5)
+  const saebLevel = (s: number) => s >= 7 ? 'ADEQUADO' : s >= 5 ? 'BASICO' : 'ABAIXO_BASICO'
+
+  const saebScoresPort = [
+    [8, 7, 9, 5, 8, 7, 9, 4, 8, 6],   // LP-D1
+    [7, 6, 8, 4, 7, 8, 9, 5, 7, 6],   // LP-D3
+    [6, 5, 7, 3, 6, 7, 8, 4, 6, 5],   // LP-D4
+    [9, 8, 9, 6, 8, 8, 10, 5, 9, 7],  // LP-D6
+    [7, 6, 8, 4, 7, 7, 8, 4, 7, 6],   // LP-D11
+    [6, 5, 7, 3, 6, 6, 7, 4, 6, 5],   // LP-D13
+  ]
+
+  const saebScoresMat = [
+    [8, 7, 9, 5, 7, 8, 9, 5, 8, 7],   // MT-D3
+    [6, 7, 8, 4, 6, 7, 8, 4, 7, 6],   // MT-D7
+    [7, 6, 8, 4, 7, 7, 8, 4, 7, 6],   // MT-D14
+    [5, 6, 7, 3, 6, 6, 7, 3, 6, 5],   // MT-D17
+    [8, 7, 9, 5, 7, 8, 9, 5, 8, 6],   // MT-D27
+  ]
+
+  for (let di = 0; di < saebPortugues.length; di++) {
+    for (let si = 0; si < students5A.length; si++) {
+      const score = saebScoresPort[di][si]
+      await prisma.studentSaebPerformance.create({
+        data: { studentId: students5A[si].id, descriptorId: saebPortugues[di].id, score, level: saebLevel(score), year: 2024 }
+      })
+    }
+  }
+
+  for (let di = 0; di < saebMatematica.length; di++) {
+    for (let si = 0; si < students5A.length; si++) {
+      const score = saebScoresMat[di][si]
+      await prisma.studentSaebPerformance.create({
+        data: { studentId: students5A[si].id, descriptorId: saebMatematica[di].id, score, level: saebLevel(score), year: 2024 }
+      })
+    }
+  }
+
+  // ─── Student ENEM Performance (9º Ano B) ──────────────────────────────────────
+  const allEnemCompetencies = [...enemMT, ...enemLC, ...enemCN]
+  const enemScores: Record<string, number[]> = {
+    'MT-C1': [620, 580, 710, 540, 680, 590, 650, 520, 630, 570],
+    'MT-C2': [590, 560, 680, 510, 650, 570, 620, 490, 600, 540],
+    'MT-C3': [610, 570, 700, 530, 660, 580, 640, 510, 620, 560],
+    'MT-C4': [580, 550, 670, 500, 640, 560, 610, 480, 590, 530],
+    'MT-C5': [600, 565, 690, 520, 655, 575, 630, 500, 610, 550],
+    'LC-C1': [650, 610, 720, 560, 690, 620, 670, 540, 660, 590],
+    'LC-C5': [670, 630, 740, 580, 710, 640, 690, 560, 680, 610],
+    'LC-C7': [640, 600, 710, 550, 680, 610, 660, 530, 650, 580],
+    'CN-C1': [600, 575, 695, 525, 660, 580, 635, 505, 615, 555],
+    'CN-C3': [585, 560, 680, 510, 645, 565, 620, 490, 600, 540],
+    'CN-C4': [595, 570, 690, 520, 655, 575, 630, 500, 610, 550],
+  }
+
+  for (const comp of allEnemCompetencies) {
+    const scores = enemScores[comp.code] || []
+    for (let si = 0; si < students9B.length; si++) {
+      await prisma.studentEnemPerformance.create({
+        data: { studentId: students9B[si].id, competencyId: comp.id, score: scores[si] || 550, year: 2024 }
+      })
+    }
+  }
 
   // Audit logs
   await prisma.auditLog.createMany({
