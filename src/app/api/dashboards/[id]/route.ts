@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { executeDashboard, DashboardConfig } from '@/lib/dashboard-engine'
 import { expandBlocks, isCompact } from '@/lib/dashboard-blocks'
+import { buildUserContext } from '@/lib/user-context'
 
 async function resolveConfig(raw: string): Promise<DashboardConfig> {
   const parsed = JSON.parse(raw)
@@ -18,9 +19,12 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   const dashboard = await prisma.userDashboard.findFirst({ where: { id: params.id, userId } })
   if (!dashboard) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  const config = resolveConfig(dashboard.config)
-  const widgets = await executeDashboard(config)
+  const [config, ctx] = await Promise.all([
+    resolveConfig(dashboard.config),
+    buildUserContext(session),
+  ])
 
+  const widgets = await executeDashboard(config, ctx)
   return NextResponse.json({ dashboard, config, widgets })
 }
 
