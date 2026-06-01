@@ -1,4 +1,5 @@
 import { prisma } from './prisma'
+import { UserContext, applyClassScope, applyStudentScope } from './user-context'
 
 // ─── Widget & Config Types ────────────────────────────────────────────────────
 
@@ -58,10 +59,11 @@ export const DATA_KEY_DESCRIPTIONS: Record<string, string> = {
 
 type Params = Record<string, string | number>
 
-async function getSaebMediaGeral(params: Params): Promise<WidgetData> {
-  const where: Record<string, unknown> = {}
-  if (params.classId) where.student = { classId: params.classId }
-  if (params.area) where.descriptor = { area: params.area }
+// ─── Query Functions (all receive UserContext for data scoping) ───────────────
+
+async function getSaebMediaGeral(params: Params, ctx: UserContext): Promise<WidgetData> {
+  const where = applyStudentScope({}, ctx, params.classId)
+  if (params.area) (where as any).descriptor = { area: params.area }
 
   const performances = await prisma.studentSaebPerformance.findMany({
     where,
@@ -77,16 +79,15 @@ async function getSaebMediaGeral(params: Params): Promise<WidgetData> {
     data: {
       value: avg.toFixed(1),
       unit: 'pts',
-      detail: `${performances.length} avaliações registradas`,
+      detail: `${performances.length} avaliações`,
       trend: avg >= 7 ? 'Nível Adequado' : avg >= 5 ? 'Nível Básico' : 'Abaixo do Básico',
     },
   }
 }
 
-async function getSaebNivelDistribuicao(params: Params): Promise<WidgetData> {
-  const where: Record<string, unknown> = {}
-  if (params.classId) where.student = { classId: params.classId }
-  if (params.area) where.descriptor = { area: params.area }
+async function getSaebNivelDistribuicao(params: Params, ctx: UserContext): Promise<WidgetData> {
+  const where = applyStudentScope({}, ctx, params.classId)
+  if (params.area) (where as any).descriptor = { area: params.area }
 
   const perfs = await prisma.studentSaebPerformance.findMany({ where })
   const total = perfs.length || 1
@@ -104,10 +105,9 @@ async function getSaebNivelDistribuicao(params: Params): Promise<WidgetData> {
   }
 }
 
-async function getSaebPorDescritor(params: Params): Promise<WidgetData> {
-  const where: Record<string, unknown> = {}
-  if (params.classId) where.student = { classId: params.classId }
-  if (params.area) where.descriptor = { area: params.area }
+async function getSaebPorDescritor(params: Params, ctx: UserContext): Promise<WidgetData> {
+  const where = applyStudentScope({}, ctx, params.classId)
+  if (params.area) (where as any).descriptor = { area: params.area }
 
   const perfs = await prisma.studentSaebPerformance.findMany({
     where,
@@ -127,16 +127,12 @@ async function getSaebPorDescritor(params: Params): Promise<WidgetData> {
     return [code, d.desc.substring(0, 45) + (d.desc.length > 45 ? '…' : ''), avg.toFixed(1)]
   })
 
-  return {
-    type: 'TABLE',
-    data: { headers: ['Código', 'Descritor', 'Média'], rows },
-  }
+  return { type: 'TABLE', data: { headers: ['Código', 'Descritor', 'Média'], rows } }
 }
 
-async function getSaebAlunosAbaixo(params: Params): Promise<WidgetData> {
-  const where: Record<string, unknown> = { level: 'ABAIXO_BASICO' }
-  if (params.classId) where.student = { classId: params.classId }
-  if (params.area) where.descriptor = { area: params.area }
+async function getSaebAlunosAbaixo(params: Params, ctx: UserContext): Promise<WidgetData> {
+  const where = applyStudentScope({ level: 'ABAIXO_BASICO' }, ctx, params.classId)
+  if (params.area) (where as any).descriptor = { area: params.area }
 
   const perfs = await prisma.studentSaebPerformance.findMany({
     where,
@@ -156,9 +152,8 @@ async function getSaebAlunosAbaixo(params: Params): Promise<WidgetData> {
   return { type: 'LIST', data: items }
 }
 
-async function getEnemMediaPorCompetencia(params: Params): Promise<WidgetData> {
-  const where: Record<string, unknown> = {}
-  if (params.classId) where.student = { classId: params.classId }
+async function getEnemMediaPorCompetencia(params: Params, ctx: UserContext): Promise<WidgetData> {
+  const where = applyStudentScope({}, ctx, params.classId)
 
   const perfs = await prisma.studentEnemPerformance.findMany({
     where,
@@ -179,9 +174,8 @@ async function getEnemMediaPorCompetencia(params: Params): Promise<WidgetData> {
   return { type: 'TABLE', data: { headers: ['Código', 'Competência', 'Média (0–1000)'], rows } }
 }
 
-async function getEnemRankingAlunos(params: Params): Promise<WidgetData> {
-  const where: Record<string, unknown> = {}
-  if (params.classId) where.student = { classId: params.classId }
+async function getEnemRankingAlunos(params: Params, ctx: UserContext): Promise<WidgetData> {
+  const where = applyStudentScope({}, ctx, params.classId)
 
   const perfs = await prisma.studentEnemPerformance.findMany({
     where,
@@ -203,12 +197,12 @@ async function getEnemRankingAlunos(params: Params): Promise<WidgetData> {
   return { type: 'LIST', data: items }
 }
 
-async function getNotasMediaTurma(params: Params): Promise<WidgetData> {
+async function getNotasMediaTurma(params: Params, ctx: UserContext): Promise<WidgetData> {
+  const where = applyClassScope({}, ctx, params.classId)
+  if (params.subjectId) where.subjectId = params.subjectId
+
   const assessments = await prisma.assessment.findMany({
-    where: {
-      ...(params.classId ? { classId: params.classId as string } : {}),
-      ...(params.subjectId ? { subjectId: params.subjectId as string } : {}),
-    },
+    where,
     include: { subject: true, class: true, gradeRecords: true },
   })
 
@@ -221,10 +215,16 @@ async function getNotasMediaTurma(params: Params): Promise<WidgetData> {
   return { type: 'TABLE', data: { headers: ['Turma', 'Componente', 'Avaliação', 'Média'], rows } }
 }
 
-async function getNotasAlunosBaixoDesempenho(params: Params): Promise<WidgetData> {
+async function getNotasAlunosBaixoDesempenho(params: Params, ctx: UserContext): Promise<WidgetData> {
   const threshold = Number(params.threshold ?? 5)
+
+  // Teachers can only see grade records for their classes
+  const teacherFilter = ctx.allowedClassIds
+    ? { assessment: { classId: { in: ctx.allowedClassIds } } }
+    : {}
+
   const records = await prisma.gradeRecord.findMany({
-    where: { score: { lt: threshold } },
+    where: { score: { lt: threshold }, ...teacherFilter },
     include: { student: true, assessment: { include: { subject: true } } },
   })
 
@@ -240,22 +240,21 @@ async function getNotasAlunosBaixoDesempenho(params: Params): Promise<WidgetData
   return { type: 'LIST', data: items }
 }
 
-async function getTarefasAdesao(params: Params): Promise<WidgetData> {
+async function getTarefasAdesao(params: Params, ctx: UserContext): Promise<WidgetData> {
+  const where = applyClassScope({}, ctx, params.classId)
+  if (params.subjectId) where.subjectId = params.subjectId
+
   const homework = await prisma.homework.findMany({
-    where: {
-      ...(params.classId ? { classId: params.classId as string } : {}),
-      ...(params.subjectId ? { subjectId: params.subjectId as string } : {}),
-    },
+    where,
     include: {
       subject: true,
-      class: true,
-      submissions: true,
+      class: { include: { students: true } },
       _count: { select: { submissions: true } },
     },
   })
 
   const items: ProgressItem[] = homework.map(hw => {
-    const total = hw.class ? 10 : 10
+    const total = hw.class.students.length || 1
     const done = hw._count.submissions
     return {
       label: `${hw.title} (${hw.subject.name})`,
@@ -269,37 +268,45 @@ async function getTarefasAdesao(params: Params): Promise<WidgetData> {
   return { type: 'PROGRESS_BARS', data: items }
 }
 
-async function getTarefasPendentes(params: Params): Promise<WidgetData> {
-  const students = await prisma.student.findMany({
-    where: params.classId ? { classId: params.classId as string } : {},
-    include: {
-      homeworkSubmissions: true,
-      class: true,
-    },
-  })
+async function getTarefasPendentes(params: Params, ctx: UserContext): Promise<WidgetData> {
+  const studentWhere = applyClassScope({}, ctx, params.classId)
+  const homeworkWhere = applyClassScope({}, ctx, params.classId)
 
-  const homework = await prisma.homework.findMany({
-    where: params.classId ? { classId: params.classId as string } : {},
-  })
+  const [students, homework] = await Promise.all([
+    prisma.student.findMany({
+      where: studentWhere,
+      include: { homeworkSubmissions: { select: { homeworkId: true } } },
+    }),
+    prisma.homework.findMany({ where: homeworkWhere, select: { id: true, classId: true } }),
+  ])
 
   const items: ListItem[] = students
     .map(s => {
-      const submitted = s.homeworkSubmissions.map(hs => hs.homeworkId)
-      const pending = homework.filter(hw => !submitted.includes(hw.id)).length
+      const submitted = new Set(s.homeworkSubmissions.map(hs => hs.homeworkId))
+      const pending = homework.filter(hw => !submitted.has(hw.id)).length
       return { name: s.name, value: `${pending} pendente(s)`, pending }
     })
     .filter(s => s.pending > 0)
     .sort((a, b) => b.pending - a.pending)
-    .map(s => ({ name: s.name, value: s.value, badge: s.pending >= 3 ? 'Crítico' : 'Pendente', badgeColor: s.pending >= 3 ? 'red' : 'yellow' }))
+    .map(s => ({
+      name: s.name,
+      value: s.value,
+      badge: s.pending >= 3 ? 'Crítico' : 'Pendente',
+      badgeColor: s.pending >= 3 ? 'red' : 'yellow',
+    }))
 
   return { type: 'LIST', data: items }
 }
 
-async function getRegistrosPedagogicos(params: Params): Promise<WidgetData> {
-  const records = await prisma.pedagogicalRecord.findMany({
-    where: { confidentiality: { not: 'CONFIDENCIAL' } },
-    include: { student: true },
-  })
+async function getRegistrosPedagogicos(params: Params, ctx: UserContext): Promise<WidgetData> {
+  // Pedagogical records are visible to all roles (CONFIDENCIAL already filtered)
+  // but PROFESSOR only sees records of students in their classes
+  const where: Record<string, unknown> = { confidentiality: { not: 'CONFIDENCIAL' } }
+  if (ctx.allowedClassIds) {
+    where.student = { classId: { in: ctx.allowedClassIds } }
+  }
+
+  const records = await prisma.pedagogicalRecord.findMany({ where })
 
   const byType: Record<string, number> = {}
   for (const r of records) {
@@ -317,25 +324,30 @@ async function getRegistrosPedagogicos(params: Params): Promise<WidgetData> {
   return { type: 'PROGRESS_BARS', data: items }
 }
 
-async function getAlunosRisco(params: Params): Promise<WidgetData> {
-  const students = await prisma.student.findMany({
-    where: params.classId ? { classId: params.classId as string } : {},
-    include: {
-      saebPerformances: true,
-      homeworkSubmissions: true,
-      pedagogicalRecords: { where: { confidentiality: { not: 'CONFIDENCIAL' } } },
-    },
-  })
+async function getAlunosRisco(params: Params, ctx: UserContext): Promise<WidgetData> {
+  const studentWhere = applyClassScope({}, ctx, params.classId)
+  const homeworkWhere = applyClassScope({}, ctx, params.classId)
 
-  const homework = await prisma.homework.findMany({
-    where: params.classId ? { classId: params.classId as string } : {},
-  })
+  const [students, homework] = await Promise.all([
+    prisma.student.findMany({
+      where: studentWhere,
+      include: {
+        saebPerformances: { select: { level: true } },
+        homeworkSubmissions: { select: { homeworkId: true } },
+        pedagogicalRecords: {
+          where: { confidentiality: { not: 'CONFIDENCIAL' } },
+          select: { id: true },
+        },
+      },
+    }),
+    prisma.homework.findMany({ where: homeworkWhere, select: { id: true } }),
+  ])
 
   const atRisk: AlertItem[] = []
   for (const s of students) {
     const abaixo = s.saebPerformances.filter(p => p.level === 'ABAIXO_BASICO').length
-    const submitted = s.homeworkSubmissions.map(hs => hs.homeworkId)
-    const pendingHw = homework.filter(hw => !submitted.includes(hw.id)).length
+    const submitted = new Set(s.homeworkSubmissions.map(hs => hs.homeworkId))
+    const pendingHw = homework.filter(hw => !submitted.has(hw.id)).length
     const alerts = s.pedagogicalRecords.length
 
     const riskScore = abaixo * 2 + pendingHw + alerts * 1.5
@@ -352,12 +364,19 @@ async function getAlunosRisco(params: Params): Promise<WidgetData> {
   return { type: 'ALERT_LIST', data: atRisk }
 }
 
-async function getAtividadeProfessores(_params: Params): Promise<WidgetData> {
+async function getAtividadeProfessores(params: Params, ctx: UserContext): Promise<WidgetData> {
   const since = new Date()
   since.setDate(since.getDate() - 30)
 
+  // Teachers only see their own activity
+  const where: Record<string, unknown> = { date: { gte: since } }
+  if (ctx.role === 'PROFESSOR') {
+    const teacher = await prisma.teacher.findUnique({ where: { userId: ctx.userId } })
+    if (teacher) where.teacherId = teacher.id
+  }
+
   const records = await prisma.classRecord.findMany({
-    where: { date: { gte: since } },
+    where,
     include: { teacher: { include: { user: true } } },
   })
 
@@ -380,13 +399,16 @@ async function getAtividadeProfessores(_params: Params): Promise<WidgetData> {
   return { type: 'LIST', data: items }
 }
 
-async function getComparativoTurmas(_params: Params): Promise<WidgetData> {
+async function getComparativoTurmas(params: Params, ctx: UserContext): Promise<WidgetData> {
+  const classWhere = ctx.allowedClassIds ? { id: { in: ctx.allowedClassIds } } : {}
+
   const classes = await prisma.class.findMany({
+    where: classWhere,
     include: {
       students: {
         include: {
-          gradeRecords: true,
-          saebPerformances: true,
+          gradeRecords: { select: { score: true } },
+          saebPerformances: { select: { score: true } },
         },
       },
     },
@@ -406,16 +428,17 @@ async function getComparativoTurmas(_params: Params): Promise<WidgetData> {
   }
 }
 
-async function getTotalAlunos(params: Params): Promise<WidgetData> {
-  const count = await prisma.student.count({
-    where: params.classId ? { classId: params.classId as string } : {},
-  })
+async function getTotalAlunos(params: Params, ctx: UserContext): Promise<WidgetData> {
+  const where = applyClassScope({}, ctx, params.classId)
+  const count = await prisma.student.count({ where })
   return { type: 'METRIC', data: { value: count, unit: 'alunos', detail: 'matriculados' } }
 }
 
 // ─── Engine ───────────────────────────────────────────────────────────────────
 
-const ENGINE: Record<string, (params: Params) => Promise<WidgetData>> = {
+type QueryFn = (params: Params, ctx: UserContext) => Promise<WidgetData>
+
+const ENGINE: Record<string, QueryFn> = {
   saeb_media_geral: getSaebMediaGeral,
   saeb_nivel_distribuicao: getSaebNivelDistribuicao,
   saeb_por_descritor: getSaebPorDescritor,
@@ -433,18 +456,24 @@ const ENGINE: Record<string, (params: Params) => Promise<WidgetData>> = {
   total_alunos: getTotalAlunos,
 }
 
-export async function executeWidget(widget: DashboardWidget): Promise<WidgetData | null> {
+export async function executeWidget(
+  widget: DashboardWidget,
+  ctx: UserContext
+): Promise<WidgetData | null> {
   const fn = ENGINE[widget.dataKey]
   if (!fn) return null
   try {
-    return await fn(widget.params || {})
+    return await fn(widget.params || {}, ctx)
   } catch {
     return null
   }
 }
 
-export async function executeDashboard(config: DashboardConfig): Promise<{ widget: DashboardWidget; data: WidgetData | null }[]> {
+export async function executeDashboard(
+  config: DashboardConfig,
+  ctx: UserContext
+): Promise<{ widget: DashboardWidget; data: WidgetData | null }[]> {
   return Promise.all(
-    config.widgets.map(async widget => ({ widget, data: await executeWidget(widget) }))
+    config.widgets.map(async widget => ({ widget, data: await executeWidget(widget, ctx) }))
   )
 }
