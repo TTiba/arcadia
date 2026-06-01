@@ -33,6 +33,7 @@ async function main() {
   await prisma.grade.deleteMany()
   await prisma.segment.deleteMany()
   await prisma.school.deleteMany()
+  await prisma.userDashboard.deleteMany()
   await prisma.saebDescriptor.deleteMany()
   await prisma.enemCompetency.deleteMany()
 
