@@ -38,6 +38,7 @@ const navItems: NavItem[] = [
   // Shared
   { href: '/admin/alunos', label: 'Alunos', icon: UserCheck, roles: ['PEDAGOGO'] },
   // AI
+  { href: '/meu-arcadia', label: 'Meu Arcadia', icon: Sparkles },
   { href: '/ai/assistente', label: 'Assistente IA', icon: Sparkles },
 ]
 

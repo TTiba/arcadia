@@ -25,6 +25,7 @@ model User {
   classRecords        ClassRecord[]
   gradeRecords        GradeRecord[]
   auditLogs           AuditLog[]
+  userDashboards      UserDashboard[]
 
   @@map("users")
 }
@@ -498,6 +499,24 @@ model StudentEnemPerformance {
 
   @@unique([studentId, competencyId, year])
   @@map("student_enem_performances")
+}
+
+// ─── User Dashboards (Meu Arcadia) ───────────────────────────────────────────
+
+model UserDashboard {
+  id          String   @id @default(cuid())
+  userId      String
+  name        String
+  description String?
+  prompt      String?
+  config      String
+  pinned      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_dashboards")
 }
 
 // ─── Audit Log ────────────────────────────────────────────────────────────────
