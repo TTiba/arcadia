@@ -3,19 +3,22 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { executeDashboard, DashboardConfig } from '@/lib/dashboard-engine'
+import { expandBlocks, isCompact } from '@/lib/dashboard-blocks'
+
+async function resolveConfig(raw: string): Promise<DashboardConfig> {
+  const parsed = JSON.parse(raw)
+  return isCompact(parsed) ? await expandBlocks(parsed) : (parsed as DashboardConfig)
+}
 
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const userId = (session.user as any).id
-  const dashboard = await prisma.userDashboard.findFirst({
-    where: { id: params.id, userId },
-  })
-
+  const dashboard = await prisma.userDashboard.findFirst({ where: { id: params.id, userId } })
   if (!dashboard) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  const config: DashboardConfig = JSON.parse(dashboard.config)
+  const config = resolveConfig(dashboard.config)
   const widgets = await executeDashboard(config)
 
   return NextResponse.json({ dashboard, config, widgets })
@@ -28,7 +31,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const userId = (session.user as any).id
   const body = await req.json()
 
-  const dashboard = await prisma.userDashboard.updateMany({
+  await prisma.userDashboard.updateMany({
     where: { id: params.id, userId },
     data: {
       ...(body.pinned !== undefined ? { pinned: body.pinned } : {}),
@@ -36,7 +39,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     },
   })
 
-  return NextResponse.json(dashboard)
+  return NextResponse.json({ ok: true })
 }
 
 export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
