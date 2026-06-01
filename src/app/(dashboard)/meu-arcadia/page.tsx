@@ -4,12 +4,12 @@ import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Plus, Sparkles, LayoutDashboard, Pin, Trash2, Loader2, ChevronRight, Clock } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { formatDateTime } from '@/lib/utils'
-import { DashboardConfig } from '@/lib/dashboard-engine'
+import { CompactDashboardConfig, BLOCK_LIBRARY } from '@/lib/dashboard-blocks'
 
 interface DashboardMeta {
   id: string
@@ -37,7 +37,7 @@ export default function MeuArcadiaPage() {
   const [dashboards, setDashboards] = useState<DashboardMeta[]>([])
   const [prompt, setPrompt] = useState('')
   const [generating, setGenerating] = useState(false)
-  const [preview, setPreview] = useState<{ config: DashboardConfig; name: string } | null>(null)
+  const [preview, setPreview] = useState<{ config: CompactDashboardConfig } | null>(null)
   const [saving, setSaving] = useState(false)
 
   useEffect(() => { fetchDashboards() }, [])
@@ -59,7 +59,7 @@ export default function MeuArcadiaPage() {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
-      setPreview({ config: data.config, name: data.config.title })
+      setPreview({ config: data.config })
     } catch (e: any) {
       toast({ title: e.message || 'Erro ao gerar dashboard', variant: 'destructive' })
     } finally {
@@ -75,7 +75,7 @@ export default function MeuArcadiaPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: preview.name,
+          name: preview.config.title,
           description: preview.config.description,
           prompt,
           config: preview.config,
@@ -168,11 +168,14 @@ export default function MeuArcadiaPage() {
             </div>
           </div>
           <div className="bg-gray-50 rounded-lg p-3">
-            <p className="text-xs font-medium text-gray-500 mb-2">Widgets que serão criados:</p>
+            <p className="text-xs font-medium text-gray-500 mb-2">Blocos que serão combinados:</p>
             <div className="flex flex-wrap gap-2">
-              {preview.config.widgets.map(w => (
-                <span key={w.id} className="text-xs px-2.5 py-1 bg-white border rounded-full text-gray-700">
-                  {w.title}
+              {preview.config.blocks.map(b => (
+                <span key={b.blockId} className="text-xs px-2.5 py-1 bg-white border rounded-full text-gray-700">
+                  {BLOCK_LIBRARY[b.blockId]?.name || b.blockId}
+                  {b.params && Object.values(b.params).length > 0 && (
+                    <span className="text-gray-400 ml-1">({Object.values(b.params).join(', ')})</span>
+                  )}
                 </span>
               ))}
             </div>

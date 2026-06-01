@@ -519,6 +519,20 @@ model UserDashboard {
   @@map("user_dashboards")
 }
 
+// Blocks created dynamically by the AI and reused across all users
+model DashboardBlock {
+  id          String   @id @default(cuid())
+  blockId     String   @unique
+  name        String
+  description String
+  widgets     String
+  usageCount  Int      @default(1)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("dashboard_blocks")
+}
+
 // ─── Audit Log ────────────────────────────────────────────────────────────────
 
 model AuditLog {
