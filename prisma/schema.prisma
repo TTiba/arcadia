@@ -128,6 +128,7 @@ model Teacher {
   teacherClasses  TeacherClass[]
   classRecords    ClassRecord[]
   gradeRecords    GradeRecord[]
+  lessonComments  LessonComment[]
 
   @@map("teachers")
 }
@@ -190,6 +191,7 @@ model Student {
   academicHistory        AcademicHistory[]
   saebPerformances       StudentSaebPerformance[]
   enemPerformances       StudentEnemPerformance[]
+  waygroundResults       WaygroundStudentResult[]
 
   @@map("students")
 }
@@ -242,6 +244,7 @@ model Lesson {
   materials     LessonMaterial[]
   classRecords  ClassRecord[]
   homework      Homework[]
+  comments      LessonComment[]
 
   @@map("lessons")
 }
@@ -319,7 +322,8 @@ model Homework {
   subject     Subject              @relation(fields: [subjectId], references: [id])
   materials   HomeworkMaterial[]
   submissions HomeworkSubmission[]
-  waygroundSyncs WaygroundSync[]
+  waygroundSyncs      WaygroundSync[]
+  waygroundActivities WaygroundActivity[]
 
   @@map("homework")
 }
@@ -452,7 +456,9 @@ model SaebDescriptor {
   level       String
   createdAt   DateTime @default(now())
 
-  performances StudentSaebPerformance[]
+  performances  StudentSaebPerformance[]
+  skillLinks    ActivitySkillLink[]
+  questionStats WaygroundQuestionStat[]
 
   @@map("saeb_descriptors")
 }
@@ -465,7 +471,9 @@ model EnemCompetency {
   type        String   @default("HABILIDADE")
   createdAt   DateTime @default(now())
 
-  performances StudentEnemPerformance[]
+  performances  StudentEnemPerformance[]
+  skillLinks    ActivitySkillLink[]
+  questionStats WaygroundQuestionStat[]
 
   @@map("enem_competencies")
 }
@@ -499,6 +507,96 @@ model StudentEnemPerformance {
 
   @@unique([studentId, competencyId, year])
   @@map("student_enem_performances")
+}
+
+// ─── Lesson Comments ─────────────────────────────────────────────────────────
+
+model LessonComment {
+  id        String   @id @default(cuid())
+  lessonId  String
+  teacherId String
+  classId   String?
+  comment   String
+  rating    Int?
+  createdAt DateTime @default(now())
+
+  lesson  Lesson  @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  teacher Teacher @relation(fields: [teacherId], references: [id])
+
+  @@map("lesson_comments")
+}
+
+// ─── Wayground Activity Reports ───────────────────────────────────────────────
+
+model WaygroundActivity {
+  id             String   @id @default(cuid())
+  externalId     String   @unique
+  homeworkId     String?
+  title          String
+  totalQuestions Int      @default(0)
+  createdAt      DateTime @default(now())
+
+  homework       Homework?                @relation(fields: [homeworkId], references: [id])
+  skillLinks     ActivitySkillLink[]
+  studentResults WaygroundStudentResult[]
+  questionStats  WaygroundQuestionStat[]
+
+  @@map("wayground_activities")
+}
+
+// Associates an activity (or specific question) with a SAEB descriptor or ENEM competency
+model ActivitySkillLink {
+  id               String  @id @default(cuid())
+  activityId       String
+  questionNumber   Int?
+  saebDescriptorId String?
+  enemCompetencyId String?
+
+  activity       WaygroundActivity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  saebDescriptor SaebDescriptor?   @relation(fields: [saebDescriptorId], references: [id])
+  enemCompetency EnemCompetency?   @relation(fields: [enemCompetencyId], references: [id])
+
+  @@map("activity_skill_links")
+}
+
+// One row per student per activity — the main Wayground report table
+model WaygroundStudentResult {
+  id               String    @id @default(cuid())
+  activityId       String
+  studentId        String
+  correctAnswers   Int
+  totalQuestions   Int
+  accuracy         Float
+  score            Float?
+  completedAt      DateTime?
+  timeSpentSeconds Int?
+  questionResults  String    // JSON: [{q:1,correct:true},{q:2,correct:false},...]
+
+  activity WaygroundActivity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  student  Student           @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([activityId, studentId])
+  @@map("wayground_student_results")
+}
+
+// Aggregated accuracy per question across all students — queryable for "worst question"
+model WaygroundQuestionStat {
+  id               String  @id @default(cuid())
+  activityId       String
+  questionNumber   Int
+  description      String?
+  correctCount     Int     @default(0)
+  totalAttempts    Int     @default(0)
+  accuracy         Float   @default(0)
+  saebDescriptorId String?
+  enemCompetencyId String?
+
+  activity       WaygroundActivity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  saebDescriptor SaebDescriptor?   @relation(fields: [saebDescriptorId], references: [id])
+  enemCompetency EnemCompetency?   @relation(fields: [enemCompetencyId], references: [id])
+
+  @@unique([activityId, questionNumber])
+  @@map("wayground_question_stats")
 }
 
 // ─── User Dashboards (Meu Arcadia) ───────────────────────────────────────────
