@@ -6,11 +6,13 @@ import Anthropic from '@anthropic-ai/sdk'
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
+// Max conversation turns to send back to the model (keeps input tokens low)
+const MAX_HISTORY = 6
+
 async function buildSchoolContext() {
   const [
     classes,
     students,
-    assessments,
     homework,
     classRecords,
     pedagogicalRecords,
@@ -21,119 +23,97 @@ async function buildSchoolContext() {
       include: { teacherClasses: { include: { teacher: { include: { user: true } }, subject: true } } }
     }),
     prisma.student.findMany({
-      include: {
-        class: true,
-        gradeRecords: { include: { assessment: { include: { subject: true } } } },
-        homeworkSubmissions: { include: { homework: { include: { subject: true } } } },
-        saebPerformances: { include: { descriptor: true } },
-        enemPerformances: { include: { competency: true } },
+      select: {
+        id: true, name: true, status: true,
+        class: { select: { name: true } },
+        gradeRecords: { select: { score: true, assessment: { select: { name: true, subject: { select: { name: true } } } } } },
+        homeworkSubmissions: { select: { homeworkId: true } },
+        saebPerformances: { select: { score: true, level: true, descriptor: { select: { code: true } } } },
+        enemPerformances: { select: { score: true, competency: { select: { code: true } } } },
+        pedagogicalRecords: { select: { type: true, title: true, resolved: true }, where: { confidentiality: { not: 'CONFIDENCIAL' } } },
       }
     }),
-    prisma.assessment.findMany({ include: { subject: true, class: true } }),
     prisma.homework.findMany({
-      include: {
-        subject: true, class: true,
-        submissions: true,
+      select: {
+        title: true, classId: true,
+        subject: { select: { name: true } },
+        class: { select: { name: true } },
+        dueDate: true,
         _count: { select: { submissions: true } },
       }
     }),
     prisma.classRecord.findMany({
-      include: { class: true, subject: true, teacher: { include: { user: true } } },
-      orderBy: { date: 'desc' }, take: 30,
+      select: { date: true, contentDeveloped: true, pending: true, class: { select: { name: true } }, subject: { select: { name: true } }, teacher: { select: { user: { select: { name: true } } } } },
+      orderBy: { date: 'desc' }, take: 20,
     }),
     prisma.pedagogicalRecord.findMany({
       where: { confidentiality: { not: 'CONFIDENCIAL' } },
-      include: { student: true },
+      select: { type: true, title: true, date: true, resolved: true, student: { select: { name: true, class: { select: { name: true } } } } },
       orderBy: { date: 'desc' }, take: 20,
     }),
-    prisma.studentSaebPerformance.findMany({ include: { descriptor: true, student: true } }),
-    prisma.studentEnemPerformance.findMany({ include: { competency: true, student: true } }),
+    prisma.studentSaebPerformance.findMany({ select: { score: true, level: true, descriptor: { select: { code: true, description: true, area: true } }, student: { select: { name: true, class: { select: { name: true } } } } } }),
+    prisma.studentEnemPerformance.findMany({ select: { score: true, competency: { select: { code: true, description: true, area: true } }, student: { select: { name: true } } } }),
   ])
 
-  // Summarize SAEB by descriptor
-  const saebByDescriptor: Record<string, { desc: string; area: string; scores: number[]; abaixo: number; basico: number; adequado: number }> = {}
+  const avg = (arr: number[]) => arr.length ? +(arr.reduce((a, b) => a + b, 0) / arr.length).toFixed(1) : null
+
+  // SAEB summary by descriptor
+  const saebMap: Record<string, { desc: string; area: string; scores: number[]; ok: number; bas: number; baixo: number }> = {}
   for (const p of saebPerformances) {
-    const key = p.descriptor.code
-    if (!saebByDescriptor[key]) {
-      saebByDescriptor[key] = { desc: p.descriptor.description, area: p.descriptor.area, scores: [], abaixo: 0, basico: 0, adequado: 0 }
-    }
-    saebByDescriptor[key].scores.push(p.score)
-    if (p.level === 'ADEQUADO') saebByDescriptor[key].adequado++
-    else if (p.level === 'BASICO') saebByDescriptor[key].basico++
-    else saebByDescriptor[key].abaixo++
+    const k = p.descriptor.code
+    if (!saebMap[k]) saebMap[k] = { desc: p.descriptor.description, area: p.descriptor.area, scores: [], ok: 0, bas: 0, baixo: 0 }
+    saebMap[k].scores.push(p.score)
+    if (p.level === 'ADEQUADO') saebMap[k].ok++
+    else if (p.level === 'BASICO') saebMap[k].bas++
+    else saebMap[k].baixo++
   }
 
-  // Summarize ENEM by competency
-  const enemByComp: Record<string, { desc: string; area: string; scores: number[] }> = {}
+  // ENEM summary by competency
+  const enemMap: Record<string, { desc: string; area: string; scores: number[] }> = {}
   for (const p of enemPerformances) {
-    const key = p.competency.code
-    if (!enemByComp[key]) {
-      enemByComp[key] = { desc: p.competency.description, area: p.competency.area, scores: [] }
-    }
-    enemByComp[key].scores.push(p.score)
+    const k = p.competency.code
+    if (!enemMap[k]) enemMap[k] = { desc: p.competency.description, area: p.competency.area, scores: [] }
+    enemMap[k].scores.push(p.score)
   }
 
-  const avg = (arr: number[]) => arr.length ? (arr.reduce((a, b) => a + b, 0) / arr.length).toFixed(1) : 'N/A'
-
-  const studentSummaries = students.map(s => {
-    const grades = s.gradeRecords.map(g => `${g.assessment.subject.name} (${g.assessment.name}): ${g.score ?? 'S/N'}/10`)
-    const hwDone = s.homeworkSubmissions.length
-    const saeb = s.saebPerformances.map(p => `${p.descriptor.code}: ${p.score} (${p.level})`)
-    const enem = s.enemPerformances.map(p => `${p.competency.code}: ${p.score}pts`)
-    return {
-      name: s.name,
-      class: s.class?.name || 'Sem turma',
-      status: s.status,
-      grades,
-      hwDone,
-      saeb: saeb.length ? saeb : null,
-      enem: enem.length ? enem : null,
-      pedagogical: pedagogicalRecords.filter(pr => pr.studentId === s.id).map(pr => `${pr.type}: ${pr.title}`),
-    }
-  })
-
-  const homeworkSummary = homework.map(hw => ({
-    title: hw.title,
-    subject: hw.subject.name,
-    class: hw.class.name,
-    dueDate: hw.dueDate?.toLocaleDateString('pt-BR') || 'Sem prazo',
-    submissions: hw._count.submissions,
-    totalStudents: students.filter(s => s.classId === hw.classId).length,
-  }))
-
-  const saebSummary = Object.entries(saebByDescriptor).map(([code, d]) => ({
-    code, description: d.desc, area: d.area,
-    mediaScore: avg(d.scores),
-    adequado: d.adequado, basico: d.basico, abaixoBasico: d.abaixo,
-  }))
-
-  const enemSummary = Object.entries(enemByComp).map(([code, d]) => ({
-    code, description: d.desc, area: d.area,
-    mediaScore: avg(d.scores),
-  }))
+  const classSizes: Record<string, number> = {}
+  for (const s of students) if (s.class) classSizes[s.class.name] = (classSizes[s.class.name] || 0) + 1
 
   return {
     turmas: classes.map(c => ({
-      nome: c.name, turno: c.shift, ano: c.year,
-      professores: c.teacherClasses.map(tc => `${tc.teacher.user.name} (${tc.subject.name})`),
+      nome: c.name, turno: c.shift, alunos: classSizes[c.name] || 0,
+      professores: c.teacherClasses.map(tc => `${tc.teacher.user.name}/${tc.subject.name}`),
     })),
-    alunos: studentSummaries,
-    tarefas: homeworkSummary,
+    alunos: students.map(s => ({
+      nome: s.name, turma: s.class?.name, status: s.status,
+      notas: s.gradeRecords.map(g => `${g.assessment.subject.name}:${g.score ?? '-'}`),
+      tarefas: s.homeworkSubmissions.length,
+      saeb: s.saebPerformances.length ? s.saebPerformances.map(p => `${p.descriptor.code}:${p.score}(${p.level.slice(0,3)})`).join(' ') : null,
+      enem: s.enemPerformances.length ? s.enemPerformances.map(p => `${p.competency.code}:${p.score}`).join(' ') : null,
+      ocorrencias: s.pedagogicalRecords.length ? s.pedagogicalRecords.map(p => `${p.type}:${p.title}`).join('; ') : null,
+    })),
+    tarefas: homework.map(hw => ({
+      titulo: hw.title, componente: hw.subject.name, turma: hw.class.name,
+      prazo: hw.dueDate?.toLocaleDateString('pt-BR'),
+      entregues: hw._count.submissions,
+      total: classSizes[hw.class.name] || 0,
+    })),
     registrosAula: classRecords.map(r => ({
-      data: r.date.toLocaleDateString('pt-BR'),
-      turma: r.class.name,
-      componente: r.subject?.name || '',
-      professor: r.teacher.user.name,
-      conteudo: r.contentDeveloped,
-      pendencias: r.pending || null,
+      data: r.date.toLocaleDateString('pt-BR'), turma: r.class.name,
+      componente: r.subject?.name, professor: r.teacher.user.name,
+      conteudo: r.contentDeveloped.slice(0, 120),
     })),
-    desempenhoSAEB: saebSummary,
-    desempenhoENEM: enemSummary,
-    alertasPedagogicos: pedagogicalRecords.map(pr => ({
-      aluno: pr.student.name,
-      tipo: pr.type,
-      titulo: pr.title,
-      data: pr.date.toLocaleDateString('pt-BR'),
+    saeb: Object.entries(saebMap).map(([code, d]) => ({
+      code, desc: d.desc, area: d.area, media: avg(d.scores),
+      adequado: d.ok, basico: d.bas, abaixoBasico: d.baixo,
+    })),
+    enem: Object.entries(enemMap).map(([code, d]) => ({
+      code, desc: d.desc, area: d.area, media: avg(d.scores),
+    })),
+    alertas: pedagogicalRecords.map(pr => ({
+      aluno: pr.student.name, turma: pr.student.class?.name,
+      tipo: pr.type, titulo: pr.title,
+      data: pr.date.toLocaleDateString('pt-BR'), resolvido: pr.resolved,
     })),
   }
 }
@@ -144,7 +124,7 @@ export async function POST(req: NextRequest) {
 
   if (!process.env.ANTHROPIC_API_KEY) {
     return NextResponse.json(
-      { error: 'ANTHROPIC_API_KEY não configurada. Adicione a chave no arquivo .env e reinicie o servidor.' },
+      { error: 'ANTHROPIC_API_KEY não configurada. Adicione a chave no .env e reinicie o servidor.' },
       { status: 503 }
     )
   }
@@ -156,30 +136,33 @@ export async function POST(req: NextRequest) {
 
   const schoolData = await buildSchoolContext()
 
-  const systemPrompt = `Você é o Assistente Pedagógico Arcadia — um assistente de inteligência artificial especializado em gestão escolar e análise de dados educacionais.
+  const systemPrompt = `Você é o Assistente Pedagógico Arcadia — especializado em análise de dados educacionais.
 
-Você tem acesso aos dados atualizados da escola. Use-os para responder perguntas, gerar relatórios e oferecer insights pedagógicos.
+DADOS DA ESCOLA (${new Date().toLocaleDateString('pt-BR')}):
+${JSON.stringify(schoolData)}
 
-## DADOS DA ESCOLA (${new Date().toLocaleDateString('pt-BR')})
+REGRAS:
+- Responda em português brasileiro, de forma objetiva e pedagógica
+- Use markdown: tabelas para comparações, listas para itens, **negrito** para destaques
+- Níveis SAEB: ADEQUADO≥7, BASICO 5–6.9, ABAIXO_BASICO<5 (abreviado ADE/BAS/ABA)
+- ENEM: escala 0–1000, média nacional ~550
+- Sinalize riscos com clareza. Nunca invente dados.`
 
-\`\`\`json
-${JSON.stringify(schoolData, null, 2)}
-\`\`\`
-
-## INSTRUÇÕES
-- Responda sempre em português brasileiro
-- Seja objetivo e pedagógico. Use dados reais da escola sempre que relevante
-- Para relatórios, use markdown com tabelas quando apropriado
-- Níveis SAEB: ADEQUADO (≥7.0), BASICO (5.0–6.9), ABAIXO_BASICO (<5.0)
-- Pontuação ENEM: escala 0–1000. Média nacional ~550
-- Quando identificar riscos (alunos abaixo do básico, muitas tarefas pendentes, registros pedagógicos), sinalize com clareza
-- Nunca invente dados. Se não houver dados para responder, diga isso claramente`
+  // Limit history to keep input tokens low
+  const recentMessages = messages.slice(-MAX_HISTORY)
 
   const response = await client.messages.create({
-    model: 'claude-opus-4-8',
-    max_tokens: 2048,
-    system: systemPrompt,
-    messages: messages.map((m: { role: string; content: string }) => ({
+    model: 'claude-haiku-4-5-20251001',
+    max_tokens: 1500,
+    system: [
+      {
+        type: 'text',
+        text: systemPrompt,
+        // @ts-expect-error cache_control is supported but not yet in SDK types
+        cache_control: { type: 'ephemeral' },
+      }
+    ],
+    messages: recentMessages.map((m: { role: string; content: string }) => ({
       role: m.role as 'user' | 'assistant',
       content: m.content,
     })),

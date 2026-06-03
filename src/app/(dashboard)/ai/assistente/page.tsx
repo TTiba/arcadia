@@ -120,7 +120,8 @@ function MessageContent({ content }: { content: string }) {
         tableLines.push(lines[i])
         i++
       }
-      const rows = tableLines.filter(l => !l.match(/^\|[\s\-:|]+\|$/))
+      const isSeparator = (r: string) => r.split('|').slice(1, -1).every(c => /^[\s\-:]+$/.test(c))
+      const rows = tableLines.filter(l => !isSeparator(l))
       const parseRow = (r: string) => r.split('|').slice(1, -1).map(c => c.trim())
       const [header, ...body] = rows
       blocks.push(
