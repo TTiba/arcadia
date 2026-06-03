@@ -1,5 +1,5 @@
 'use client'
-import { useState, useRef, useEffect } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -46,22 +46,111 @@ function MessageBubble({ message }: { message: Message }) {
   )
 }
 
-function MessageContent({ content }: { content: string }) {
-  // Very simple markdown-ish rendering: bold, code blocks, tables
-  const lines = content.split('\n')
+function InlineMarkdown({ text }: { text: string }) {
+  // Render inline bold (**text**) and inline code (`code`)
+  const parts = text.split(/(\*\*[^*]+\*\*|`[^`]+`)/g)
   return (
-    <div className="space-y-1">
-      {lines.map((line, i) => {
-        if (line.startsWith('## ')) return <h3 key={i} className="font-bold text-base mt-2">{line.slice(3)}</h3>
-        if (line.startsWith('### ')) return <h4 key={i} className="font-semibold mt-1">{line.slice(4)}</h4>
-        if (line.startsWith('**') && line.endsWith('**')) return <p key={i} className="font-semibold">{line.slice(2, -2)}</p>
-        if (line.startsWith('- ') || line.startsWith('* ')) return <li key={i} className="ml-4 list-disc">{line.slice(2)}</li>
-        if (line.startsWith('| ')) return <pre key={i} className="text-xs font-mono overflow-x-auto">{line}</pre>
-        if (line.trim() === '') return <div key={i} className="h-1" />
-        return <p key={i}>{line}</p>
+    <>
+      {parts.map((part, i) => {
+        if (part.startsWith('**') && part.endsWith('**'))
+          return <strong key={i}>{part.slice(2, -2)}</strong>
+        if (part.startsWith('`') && part.endsWith('`'))
+          return <code key={i} className="bg-black/10 rounded px-1 py-0.5 text-xs font-mono">{part.slice(1, -1)}</code>
+        return <span key={i}>{part}</span>
       })}
-    </div>
+    </>
   )
+}
+
+function MessageContent({ content }: { content: string }) {
+  const lines = content.split('\n')
+  const blocks: React.ReactNode[] = []
+  let i = 0
+
+  while (i < lines.length) {
+    const line = lines[i]
+
+    // Heading
+    if (line.startsWith('# '))  { blocks.push(<h2 key={i} className="font-bold text-base mt-3 mb-1"><InlineMarkdown text={line.slice(2)} /></h2>); i++; continue }
+    if (line.startsWith('## ')) { blocks.push(<h3 key={i} className="font-bold text-sm mt-3 mb-1"><InlineMarkdown text={line.slice(3)} /></h3>); i++; continue }
+    if (line.startsWith('### ')) { blocks.push(<h4 key={i} className="font-semibold text-sm mt-2"><InlineMarkdown text={line.slice(4)} /></h4>); i++; continue }
+
+    // Horizontal rule
+    if (line.trim() === '---') { blocks.push(<hr key={i} className="my-2 border-border/40" />); i++; continue }
+
+    // Blockquote — group consecutive > lines
+    if (line.startsWith('> ')) {
+      const quoteLines: string[] = []
+      while (i < lines.length && lines[i].startsWith('> ')) {
+        quoteLines.push(lines[i].slice(2))
+        i++
+      }
+      blocks.push(
+        <blockquote key={`q${i}`} className="border-l-2 border-violet-400 pl-3 my-1 text-muted-foreground italic text-xs">
+          {quoteLines.map((q, j) => <p key={j}><InlineMarkdown text={q} /></p>)}
+        </blockquote>
+      )
+      continue
+    }
+
+    // List — group consecutive - or * lines
+    if (line.startsWith('- ') || line.startsWith('* ')) {
+      const items: string[] = []
+      while (i < lines.length && (lines[i].startsWith('- ') || lines[i].startsWith('* '))) {
+        items.push(lines[i].slice(2))
+        i++
+      }
+      blocks.push(
+        <ul key={`ul${i}`} className="my-1 space-y-0.5">
+          {items.map((item, j) => (
+            <li key={j} className="flex gap-1.5 items-start">
+              <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-violet-400" />
+              <span><InlineMarkdown text={item} /></span>
+            </li>
+          ))}
+        </ul>
+      )
+      continue
+    }
+
+    // Table — group consecutive | lines, skip separator rows (---|---)
+    if (line.startsWith('|')) {
+      const tableLines: string[] = []
+      while (i < lines.length && lines[i].startsWith('|')) {
+        tableLines.push(lines[i])
+        i++
+      }
+      const rows = tableLines.filter(l => !l.match(/^\|[\s\-:|]+\|$/))
+      const parseRow = (r: string) => r.split('|').slice(1, -1).map(c => c.trim())
+      const [header, ...body] = rows
+      blocks.push(
+        <div key={`t${i}`} className="my-2 overflow-x-auto rounded-lg border border-border/50">
+          <table className="w-full text-xs">
+            <thead className="bg-muted/60">
+              <tr>{parseRow(header).map((cell, j) => <th key={j} className="px-3 py-2 text-left font-semibold"><InlineMarkdown text={cell} /></th>)}</tr>
+            </thead>
+            <tbody>
+              {body.map((row, ri) => (
+                <tr key={ri} className="border-t border-border/30 even:bg-muted/20">
+                  {parseRow(row).map((cell, j) => <td key={j} className="px-3 py-1.5"><InlineMarkdown text={cell} /></td>)}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )
+      continue
+    }
+
+    // Empty line
+    if (line.trim() === '') { blocks.push(<div key={i} className="h-1" />); i++; continue }
+
+    // Normal paragraph
+    blocks.push(<p key={i} className="leading-relaxed"><InlineMarkdown text={line} /></p>)
+    i++
+  }
+
+  return <div className="space-y-0.5">{blocks}</div>
 }
 
 export default function AssistentePage() {
