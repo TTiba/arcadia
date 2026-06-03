@@ -6,8 +6,40 @@ import Anthropic from '@anthropic-ai/sdk'
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
-// Max conversation turns to send back to the model (keeps input tokens low)
 const MAX_HISTORY = 6
+
+// ── Model routing ─────────────────────────────────────────────────────────────
+const MODELS = {
+  haiku:  'claude-haiku-4-5-20251001',
+  sonnet: 'claude-sonnet-4-6',
+  opus:   'claude-opus-4-8',
+} as const
+
+// Cost per million tokens (input / cacheWrite / cacheRead / output)
+const RATES: Record<string, [number, number, number, number]> = {
+  [MODELS.haiku]:  [0.80,  1.00, 0.08,  4.00],
+  [MODELS.sonnet]: [3.00,  3.75, 0.30, 15.00],
+  [MODELS.opus]:   [15.00, 18.75, 1.50, 75.00],
+}
+
+function selectModel(question: string): string {
+  const q = question.toLowerCase()
+  if (/relatório formal|plano de intervenção|plano individualizado|análise aprofundada|diagnóstico completo/.test(q))
+    return MODELS.opus
+  if (/compare|compara|evolução|correlacione|analise|tendência|histórico|ranking|diferença entre/.test(q))
+    return MODELS.sonnet
+  return MODELS.haiku
+}
+
+function calcCost(model: string, usage: { input_tokens: number; output_tokens: number; cache_creation_input_tokens?: number; cache_read_input_tokens?: number }): number {
+  const [rIn, rCacheWrite, rCacheRead, rOut] = RATES[model] ?? RATES[MODELS.haiku]
+  const cost =
+    (usage.input_tokens * rIn +
+    (usage.cache_creation_input_tokens ?? 0) * rCacheWrite +
+    (usage.cache_read_input_tokens ?? 0) * rCacheRead +
+    usage.output_tokens * rOut) / 1_000_000
+  return Math.round(cost * 10000) / 10000 // 4 decimal places
+}
 
 async function buildSchoolContext() {
   const [
@@ -148,11 +180,12 @@ REGRAS:
 - ENEM: escala 0–1000, média nacional ~550
 - Sinalize riscos com clareza. Nunca invente dados.`
 
-  // Limit history to keep input tokens low
   const recentMessages = messages.slice(-MAX_HISTORY)
+  const lastUserMessage = [...recentMessages].reverse().find(m => m.role === 'user')?.content ?? ''
+  const model = selectModel(lastUserMessage)
 
   const response = await client.messages.create({
-    model: 'claude-haiku-4-5-20251001',
+    model,
     max_tokens: 1500,
     system: [
       {
@@ -169,5 +202,8 @@ REGRAS:
   })
 
   const text = response.content[0].type === 'text' ? response.content[0].text : ''
-  return NextResponse.json({ message: text })
+  const cost = calcCost(model, response.usage as Parameters<typeof calcCost>[1])
+  const modelLabel = model === MODELS.opus ? 'Opus' : model === MODELS.sonnet ? 'Sonnet' : 'Haiku'
+
+  return NextResponse.json({ message: text, model: modelLabel, cost })
 }

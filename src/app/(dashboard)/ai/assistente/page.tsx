@@ -11,6 +11,8 @@ import { cn } from '@/lib/utils'
 interface Message {
   role: 'user' | 'assistant'
   content: string
+  model?: string
+  cost?: number
 }
 
 const QUICK_PROMPTS = [
@@ -24,6 +26,12 @@ const QUICK_PROMPTS = [
   'Professores que não registraram aula recentemente',
 ]
 
+const MODEL_COLORS: Record<string, string> = {
+  Haiku:  'text-emerald-600 border-emerald-200 bg-emerald-50',
+  Sonnet: 'text-blue-600   border-blue-200   bg-blue-50',
+  Opus:   'text-violet-600 border-violet-200 bg-violet-50',
+}
+
 function MessageBubble({ message }: { message: Message }) {
   const isUser = message.role === 'user'
   return (
@@ -34,13 +42,27 @@ function MessageBubble({ message }: { message: Message }) {
       )}>
         {isUser ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
       </div>
-      <div className={cn(
-        'max-w-[80%] rounded-2xl px-4 py-3 text-sm leading-relaxed',
-        isUser
-          ? 'bg-primary text-white rounded-tr-sm'
-          : 'bg-muted text-foreground rounded-tl-sm'
-      )}>
-        <MessageContent content={message.content} />
+      <div className="max-w-[80%] flex flex-col gap-1">
+        <div className={cn(
+          'rounded-2xl px-4 py-3 text-sm leading-relaxed',
+          isUser
+            ? 'bg-primary text-white rounded-tr-sm'
+            : 'bg-muted text-foreground rounded-tl-sm'
+        )}>
+          <MessageContent content={message.content} />
+        </div>
+        {!isUser && message.model && (
+          <div className="flex items-center gap-1.5 px-1">
+            <span className={cn('text-[10px] px-1.5 py-0.5 rounded border font-medium', MODEL_COLORS[message.model] ?? MODEL_COLORS.Haiku)}>
+              {message.model}
+            </span>
+            {message.cost !== undefined && (
+              <span className="text-[10px] text-muted-foreground">
+                ~${message.cost.toFixed(4)}
+              </span>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )
@@ -196,7 +218,7 @@ export default function AssistentePage() {
       if (!res.ok) {
         setError(data.error || 'Erro ao conectar com o assistente.')
       } else {
-        setMessages(prev => [...prev, { role: 'assistant', content: data.message }])
+        setMessages(prev => [...prev, { role: 'assistant', content: data.message, model: data.model, cost: data.cost }])
       }
     } catch {
       setError('Erro de rede. Verifique sua conexão.')
