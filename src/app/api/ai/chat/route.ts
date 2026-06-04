@@ -42,110 +42,115 @@ function calcCost(model: string, usage: { input_tokens: number; output_tokens: n
 }
 
 async function buildSchoolContext() {
-  const [
-    classes,
-    students,
-    homework,
-    classRecords,
-    pedagogicalRecords,
-    saebPerformances,
-    enemPerformances,
-  ] = await Promise.all([
-    prisma.class.findMany({
-      include: { teacherClasses: { include: { teacher: { include: { user: true } }, subject: true } } }
-    }),
-    prisma.student.findMany({
-      select: {
-        id: true, name: true, status: true,
-        class: { select: { name: true } },
-        gradeRecords: { select: { score: true, assessment: { select: { name: true, subject: { select: { name: true } } } } } },
-        homeworkSubmissions: { select: { homeworkId: true } },
-        saebPerformances: { select: { score: true, level: true, descriptor: { select: { code: true } } } },
-        enemPerformances: { select: { score: true, competency: { select: { code: true } } } },
-        pedagogicalRecords: { select: { type: true, title: true, resolved: true }, where: { confidentiality: { not: 'CONFIDENCIAL' } } },
-      }
-    }),
-    prisma.homework.findMany({
-      select: {
-        title: true, classId: true,
-        subject: { select: { name: true } },
-        class: { select: { name: true } },
-        dueDate: true,
-        _count: { select: { submissions: true } },
-      }
-    }),
-    prisma.classRecord.findMany({
-      select: { date: true, contentDeveloped: true, pending: true, class: { select: { name: true } }, subject: { select: { name: true } }, teacher: { select: { user: { select: { name: true } } } } },
-      orderBy: { date: 'desc' }, take: 20,
-    }),
-    prisma.pedagogicalRecord.findMany({
-      where: { confidentiality: { not: 'CONFIDENCIAL' } },
-      select: { type: true, title: true, date: true, resolved: true, student: { select: { name: true, class: { select: { name: true } } } } },
-      orderBy: { date: 'desc' }, take: 20,
-    }),
-    prisma.studentSaebPerformance.findMany({ select: { score: true, level: true, descriptor: { select: { code: true, description: true, area: true } }, student: { select: { name: true, class: { select: { name: true } } } } } }),
-    prisma.studentEnemPerformance.findMany({ select: { score: true, competency: { select: { code: true, description: true, area: true } }, student: { select: { name: true } } } }),
-  ])
-
   const avg = (arr: number[]) => arr.length ? +(arr.reduce((a, b) => a + b, 0) / arr.length).toFixed(1) : null
+  const pct = (n: number, t: number) => t ? Math.round(n / t * 100) : 0
 
-  // SAEB summary by descriptor
-  const saebMap: Record<string, { desc: string; area: string; scores: number[]; ok: number; bas: number; baixo: number }> = {}
-  for (const p of saebPerformances) {
-    const k = p.descriptor.code
-    if (!saebMap[k]) saebMap[k] = { desc: p.descriptor.description, area: p.descriptor.area, scores: [], ok: 0, bas: 0, baixo: 0 }
-    saebMap[k].scores.push(p.score)
-    if (p.level === 'ADEQUADO') saebMap[k].ok++
-    else if (p.level === 'BASICO') saebMap[k].bas++
-    else saebMap[k].baixo++
-  }
+  const schools = await prisma.school.findMany({ include: { classes: true } })
 
-  // ENEM summary by competency
-  const enemMap: Record<string, { desc: string; area: string; scores: number[] }> = {}
-  for (const p of enemPerformances) {
-    const k = p.competency.code
-    if (!enemMap[k]) enemMap[k] = { desc: p.competency.description, area: p.competency.area, scores: [] }
-    enemMap[k].scores.push(p.score)
-  }
+  // Per-school aggregated data — no per-student rows
+  const escolas = await Promise.all(schools.map(async school => {
+    const classIds = school.classes.map(c => c.id)
 
-  const classSizes: Record<string, number> = {}
-  for (const s of students) if (s.class) classSizes[s.class.name] = (classSizes[s.class.name] || 0) + 1
+    const [totalAlunos, gradeRows, saebRows, pedCounts, pedRecent] = await Promise.all([
+      prisma.student.count({ where: { classId: { in: classIds } } }),
+      prisma.gradeRecord.findMany({
+        where: { assessment: { classId: { in: classIds } } },
+        select: { score: true, assessment: { select: { subject: { select: { name: true } } } } },
+      }),
+      prisma.studentSaebPerformance.findMany({
+        where: { student: { classId: { in: classIds } } },
+        select: { score: true, level: true, descriptor: { select: { code: true, description: true, area: true } } },
+      }),
+      // Count by type for family/at-risk pipeline
+      Promise.all(['OBSERVACAO','REUNIAO','BUSCA_ATIVA','ATENDIMENTO','ADVERTENCIA'].map(async tipo => ({
+        tipo,
+        total: await prisma.pedagogicalRecord.count({ where: { student: { classId: { in: classIds } }, type: tipo } }),
+        abertos: await prisma.pedagogicalRecord.count({ where: { student: { classId: { in: classIds } }, type: tipo, resolved: false } }),
+      }))),
+      prisma.pedagogicalRecord.findMany({
+        where: { student: { classId: { in: classIds } }, resolved: false, confidentiality: { not: 'CONFIDENCIAL' } },
+        orderBy: { date: 'desc' }, take: 8,
+        select: { type: true, title: true, date: true, actionPlan: true, student: { select: { name: true, class: { select: { name: true } } } } },
+      }),
+    ])
+
+    // Grade stats
+    const allScores = gradeRows.map(g => g.score).filter(Boolean) as number[]
+    const belowAvg = allScores.filter(s => s < 5).length
+
+    // SAEB per descriptor
+    const saebMap: Record<string, { desc: string; area: string; scores: number[]; ok: number; bas: number; baixo: number }> = {}
+    for (const p of saebRows) {
+      if (!saebMap[p.descriptor.code]) saebMap[p.descriptor.code] = { desc: p.descriptor.description, area: p.descriptor.area, scores: [], ok: 0, bas: 0, baixo: 0 }
+      saebMap[p.descriptor.code].scores.push(p.score)
+      if (p.level === 'ADEQUADO') saebMap[p.descriptor.code].ok++
+      else if (p.level === 'BASICO') saebMap[p.descriptor.code].bas++
+      else saebMap[p.descriptor.code].baixo++
+    }
+
+    const teachers = await prisma.teacherClass.findMany({
+      where: { classId: { in: classIds } },
+      distinct: ['teacherId'],
+      select: { teacher: { select: { user: { select: { name: true } } } }, subject: { select: { name: true } } },
+      take: 10,
+    })
+
+    return {
+      escola: school.name,
+      cidade: school.address?.split(',')[1]?.trim().split('-')[0]?.trim() ?? '',
+      totalAlunos,
+      totalTurmas: school.classes.length,
+      professores: teachers.map(t => `${t.teacher.user.name} (${t.subject.name})`),
+      desempenho: {
+        mediaGeral: avg(allScores),
+        abaixoMedia: belowAvg,
+        pctAbaixoMedia: pct(belowAvg, allScores.length),
+      },
+      saeb9Ano: Object.entries(saebMap).map(([code, d]) => {
+        const total = d.ok + d.bas + d.baixo
+        return {
+          codigo: code, descricao: d.desc.slice(0, 55), area: d.area,
+          media: avg(d.scores),
+          adequado: pct(d.ok, total),
+          basico: pct(d.bas, total),
+          abaixoBasico: pct(d.baixo, total),
+        }
+      }),
+      acompanhamentoPedagogico: {
+        totaisPorTipo: pedCounts,
+        casosAbertosRecentes: pedRecent.map(p => ({
+          aluno: p.student.name, turma: p.student.class?.name,
+          tipo: p.type, titulo: p.title.slice(0, 70),
+          data: p.date.toLocaleDateString('pt-BR'),
+          plano: p.actionPlan?.slice(0, 80),
+        })),
+      },
+    }
+  }))
+
+  // Recent class records across all schools (last 15)
+  const registrosRecentes = await prisma.classRecord.findMany({
+    orderBy: { date: 'desc' }, take: 15,
+    select: {
+      date: true, contentDeveloped: true, pending: true, observations: true,
+      class: { select: { name: true, school: { select: { name: true } } } },
+      subject: { select: { name: true } },
+      teacher: { select: { user: { select: { name: true } } } },
+    },
+  })
 
   return {
-    turmas: classes.map(c => ({
-      nome: c.name, turno: c.shift, alunos: classSizes[c.name] || 0,
-      professores: c.teacherClasses.map(tc => `${tc.teacher.user.name}/${tc.subject.name}`),
-    })),
-    alunos: students.map(s => ({
-      nome: s.name, turma: s.class?.name, status: s.status,
-      notas: s.gradeRecords.map(g => `${g.assessment.subject.name}:${g.score ?? '-'}`),
-      tarefas: s.homeworkSubmissions.length,
-      saeb: s.saebPerformances.length ? s.saebPerformances.map(p => `${p.descriptor.code}:${p.score}(${p.level.slice(0,3)})`).join(' ') : null,
-      enem: s.enemPerformances.length ? s.enemPerformances.map(p => `${p.competency.code}:${p.score}`).join(' ') : null,
-      ocorrencias: s.pedagogicalRecords.length ? s.pedagogicalRecords.map(p => `${p.type}:${p.title}`).join('; ') : null,
-    })),
-    tarefas: homework.map(hw => ({
-      titulo: hw.title, componente: hw.subject.name, turma: hw.class.name,
-      prazo: hw.dueDate?.toLocaleDateString('pt-BR'),
-      entregues: hw._count.submissions,
-      total: classSizes[hw.class.name] || 0,
-    })),
-    registrosAula: classRecords.map(r => ({
-      data: r.date.toLocaleDateString('pt-BR'), turma: r.class.name,
-      componente: r.subject?.name, professor: r.teacher.user.name,
-      conteudo: r.contentDeveloped.slice(0, 120),
-    })),
-    saeb: Object.entries(saebMap).map(([code, d]) => ({
-      code, desc: d.desc, area: d.area, media: avg(d.scores),
-      adequado: d.ok, basico: d.bas, abaixoBasico: d.baixo,
-    })),
-    enem: Object.entries(enemMap).map(([code, d]) => ({
-      code, desc: d.desc, area: d.area, media: avg(d.scores),
-    })),
-    alertas: pedagogicalRecords.map(pr => ({
-      aluno: pr.student.name, turma: pr.student.class?.name,
-      tipo: pr.type, titulo: pr.title,
-      data: pr.date.toLocaleDateString('pt-BR'), resolvido: pr.resolved,
+    dataConsulta: new Date().toLocaleDateString('pt-BR'),
+    escolas,
+    registrosAulaRecentes: registrosRecentes.map(r => ({
+      data: r.date.toLocaleDateString('pt-BR'),
+      escola: r.class.school?.name,
+      turma: r.class.name,
+      componente: r.subject?.name,
+      professor: r.teacher.user.name,
+      conteudo: r.contentDeveloped.slice(0, 160),
+      pendencias: r.pending?.slice(0, 120) ?? null,
+      observacoes: r.observations?.slice(0, 120) ?? null,
     })),
   }
 }
@@ -168,17 +173,20 @@ export async function POST(req: NextRequest) {
 
   const schoolData = await buildSchoolContext()
 
-  const systemPrompt = `Você é o Assistente Pedagógico Arcadia — especializado em análise de dados educacionais.
+  const systemPrompt = `Você é o Assistente Pedagógico Arcadia — especializado em análise de dados educacionais para secretarias e gestores escolares.
 
-DADOS DA ESCOLA (${new Date().toLocaleDateString('pt-BR')}):
-${JSON.stringify(schoolData)}
+CONTEXTO DO SISTEMA (${new Date().toLocaleDateString('pt-BR')}):
+${JSON.stringify(schoolData, null, 0)}
 
-REGRAS:
-- Responda em português brasileiro, de forma objetiva e pedagógica
-- Use markdown: tabelas para comparações, listas para itens, **negrito** para destaques
-- Níveis SAEB: ADEQUADO≥7, BASICO 5–6.9, ABAIXO_BASICO<5 (abreviado ADE/BAS/ABA)
-- ENEM: escala 0–1000, média nacional ~550
-- Sinalize riscos com clareza. Nunca invente dados.`
+INSTRUÇÕES:
+- Responda em português brasileiro, de forma objetiva e direta
+- Use markdown: tabelas para comparações entre escolas, listas para itens, **negrito** para indicadores críticos
+- Níveis SAEB: adequado ≥70% | básico 50–69% | abaixo do básico <50% (use os percentuais do JSON)
+- Os dados de desempenho (saeb9Ano) se referem ao 9º ano — série avaliada pelo SAEB/IDEB
+- acompanhamentoPedagogico.totaisPorTipo mostra o pipeline familiar: OBSERVACAO → REUNIAO → BUSCA_ATIVA
+- registrosAulaRecentes contém os últimos 15 diários de classe (conteúdo + pendências + observações)
+- Se perguntarem sobre aluno específico não presente nos dados, diga que o contexto atual mostra dados agregados e que a informação detalhada está no módulo do pedagogo
+- Nunca invente dados. Se um campo for null ou ausente, diga explicitamente.`
 
   const recentMessages = messages.slice(-MAX_HISTORY)
   const lastUserMessage = [...recentMessages].reverse().find(m => m.role === 'user')?.content ?? ''
