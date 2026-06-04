@@ -7,7 +7,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
-import { Loader2, ArrowLeft, Send, Sparkles, X, Bot, Copy, Check } from 'lucide-react'
+import { Loader2, ArrowLeft, Send, Sparkles, X, Bot, Copy, Check, Clock, Flame, AlertTriangle } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { cn } from '@/lib/utils'
 
@@ -15,7 +15,36 @@ interface MsgPerson { id: string; name: string; role: string }
 interface Reply { id: string; body: string; createdAt: string; sender: MsgPerson; recipient: MsgPerson }
 interface FullMessage {
   id: string; subject: string; body: string; readAt: string | null; createdAt: string; parentId: string | null
+  replyDeadline: string | null
   sender: MsgPerson; recipient: MsgPerson; replies: Reply[]
+}
+
+function DeadlineBar({ deadline }: { deadline: string }) {
+  const d = new Date(deadline)
+  const ms = d.getTime() - Date.now()
+  const expired = ms <= 0
+  const critical = ms > 0 && ms < 2 * 3600_000
+  const warning  = ms > 0 && ms < 6 * 3600_000
+
+  const label = expired ? 'PRAZO VENCIDO — responda imediatamente'
+    : ms < 3600_000 ? `${Math.floor(ms / 60000)} minutos para o prazo`
+    : ms < 24 * 3600_000 ? `${Math.floor(ms / 3600_000)}h ${Math.floor((ms % 3600_000) / 60000)}min para o prazo`
+    : `Prazo: ${d.toLocaleString('pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}`
+
+  const Icon = expired || critical ? Flame : warning ? AlertTriangle : Clock
+
+  return (
+    <div className={cn(
+      'flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold mb-4',
+      expired  ? 'bg-red-600 text-white animate-pulse' :
+      critical ? 'bg-red-500 text-white animate-pulse' :
+      warning  ? 'bg-amber-500 text-white' :
+                 'bg-blue-500 text-white'
+    )}>
+      <Icon className="h-4 w-4 shrink-0" />
+      <span className="flex-1">{label}</span>
+    </div>
+  )
 }
 interface AIMessage { role: 'user' | 'assistant'; content: string; model?: string }
 
@@ -167,6 +196,11 @@ export default function MessageViewPage() {
       <div className={cn('flex flex-col flex-1 overflow-hidden', aiOpen && 'border-r border-border')}>
         <div className="flex-1 overflow-y-auto p-6">
           <div className="max-w-2xl space-y-6">
+            {/* Deadline bar — shown only to recipient when deadline is set */}
+            {message.replyDeadline && message.recipient.id === currentUserId && (
+              <DeadlineBar deadline={message.replyDeadline} />
+            )}
+
             {/* Back + Subject */}
             <div className="flex items-start gap-3">
               <Button variant="ghost" size="icon" onClick={() => router.push('/mensagens')} className="shrink-0">

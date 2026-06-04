@@ -4,7 +4,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 
 const MSG_SELECT = {
-  id: true, subject: true, body: true, readAt: true, createdAt: true, parentId: true,
+  id: true, subject: true, body: true, readAt: true, createdAt: true, parentId: true, replyDeadline: true,
   sender:    { select: { id: true, name: true, role: true } },
   recipient: { select: { id: true, name: true, role: true } },
   replies: {

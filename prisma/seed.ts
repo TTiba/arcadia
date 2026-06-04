@@ -504,13 +504,23 @@ async function main() {
   const dirA = await prisma.user.findUnique({ where: { email: 'diretora@eeteixeira.pr.edu.br' } })
 
   if (secretaria && dirA) {
+    // Message with imminent deadline — will trigger urgent alert in demo
+    const urgentDeadline = new Date(Date.now() + 3 * 3600 * 1000) // 3h from now
+    await prisma.message.create({ data: {
+      senderId: secretaria.id, recipientId: dirA.id,
+      subject: 'URGENTE: Plano de intervenção — enviar até hoje',
+      body: 'Diretora Regina,\n\nO Conselho Pedagógico se reúne hoje às 18h e precisa do plano de intervenção para os alunos com busca ativa em aberto no 9º ano.\n\nPor favor, envie o documento atualizado com urgência.\n\nSecretaria de Educação do Paraná',
+      replyDeadline: urgentDeadline,
+      createdAt: new Date(Date.now() - 2 * 3600 * 1000),
+    }})
+
     const msg1 = await prisma.message.create({ data: {
       senderId: secretaria.id, recipientId: dirA.id,
       subject: 'Resultados SAEB 2024 — ação necessária',
       body: 'Prezada Diretora Regina,\n\nOs dados preliminares do SAEB 2024 indicam que a Escola Estadual Prof. Anísio Teixeira apresenta 5% dos alunos do 9º ano abaixo do nível básico em Língua Portuguesa.\n\nSolicito a elaboração de um plano de intervenção pedagógica para os descritores com menor desempenho (LP9-D14 e MT9-D24) até o próximo bimestre.\n\nAtenciosamente,\nSecretaria de Educação do Paraná',
+      replyDeadline: new Date(Date.now() + 20 * 3600 * 1000), // 20h from now
       createdAt: new Date(2024, 4, 20),
     }})
-    // Director replies
     await prisma.message.create({ data: {
       senderId: dirA.id, recipientId: secretaria.id,
       subject: 'Re: Resultados SAEB 2024 — ação necessária',

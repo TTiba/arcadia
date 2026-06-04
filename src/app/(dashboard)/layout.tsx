@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import { authOptions } from '@/lib/auth'
 import { Sidebar } from '@/components/sidebar'
 import { DashboardHeader } from '@/components/dashboard-header'
+import { DeadlineAlert } from '@/components/deadline-alert'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession(authOptions)
@@ -17,6 +18,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
           {children}
         </main>
       </div>
+      <DeadlineAlert />
     </div>
   )
 }

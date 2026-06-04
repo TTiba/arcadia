@@ -11,12 +11,12 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { Inbox, Send, Pencil, Loader2 } from 'lucide-react'
+import { Inbox, Send, Pencil, Loader2, Clock, Flame, AlertTriangle } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { cn } from '@/lib/utils'
 
 interface Msg {
-  id: string; subject: string; body: string; readAt: string | null; createdAt: string
+  id: string; subject: string; body: string; readAt: string | null; createdAt: string; replyDeadline: string | null
   sender: { id: string; name: string; role: string }
   recipient: { id: string; name: string; role: string }
 }
@@ -41,6 +41,35 @@ function timeAgo(dateStr: string) {
   return d.toLocaleDateString('pt-BR')
 }
 
+function DeadlineBadge({ deadline }: { deadline: string }) {
+  const d = new Date(deadline)
+  const ms = d.getTime() - Date.now()
+  const expired = ms <= 0
+  const critical = ms > 0 && ms < 2 * 3600_000
+  const warning  = ms > 0 && ms < 6 * 3600_000
+
+  let label = ''
+  if (expired) label = 'Prazo vencido'
+  else if (ms < 3600_000) label = `${Math.floor(ms / 60000)}min`
+  else if (ms < 24 * 3600_000) label = `${Math.floor(ms / 3600_000)}h`
+  else label = d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })
+
+  const Icon = expired || critical ? Flame : AlertTriangle
+
+  return (
+    <span className={cn(
+      'flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full',
+      expired  ? 'bg-red-100 text-red-700 animate-pulse' :
+      critical ? 'bg-red-100 text-red-600 animate-pulse' :
+      warning  ? 'bg-amber-100 text-amber-700' :
+                 'bg-blue-100 text-blue-700'
+    )}>
+      <Icon className="h-2.5 w-2.5" />
+      {label}
+    </span>
+  )
+}
+
 export default function MensagensPage() {
   const { data: session } = useSession()
   const router = useRouter()
@@ -51,7 +80,7 @@ export default function MensagensPage() {
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
   const [sending, setSending] = useState(false)
-  const [form, setForm] = useState({ recipientId: '', subject: '', body: '' })
+  const [form, setForm] = useState({ recipientId: '', subject: '', body: '', replyDeadline: '' })
 
   const role = (session?.user as any)?.role ?? ''
   const canCompose = ['ADMIN', 'COORDENACAO', 'PEDAGOGO', 'PROFESSOR'].includes(role)
@@ -77,13 +106,16 @@ export default function MensagensPage() {
     const res = await fetch('/api/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(form),
+      body: JSON.stringify({
+        ...form,
+        replyDeadline: form.replyDeadline || null,
+      }),
     })
     setSending(false)
     if (res.ok) {
       toast({ title: 'Mensagem enviada!' })
       setOpen(false)
-      setForm({ recipientId: '', subject: '', body: '' })
+      setForm({ recipientId: '', subject: '', body: '', replyDeadline: '' })
       if (tab === 'sent') load()
     } else {
       toast({ title: 'Erro ao enviar mensagem', variant: 'destructive' })
@@ -126,6 +158,25 @@ export default function MensagensPage() {
                   <Label>Assunto</Label>
                   <Input placeholder="Assunto da mensagem" value={form.subject}
                     onChange={e => setForm(f => ({ ...f, subject: e.target.value }))} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Prazo para resposta <span className="text-muted-foreground text-xs">(opcional)</span></Label>
+                  <div className="flex items-center gap-2">
+                    <Clock className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <Input
+                      type="datetime-local"
+                      value={form.replyDeadline}
+                      onChange={e => setForm(f => ({ ...f, replyDeadline: e.target.value }))}
+                      min={new Date().toISOString().slice(0, 16)}
+                      className="flex-1"
+                    />
+                  </div>
+                  {form.replyDeadline && (
+                    <p className="text-xs text-amber-600 flex items-center gap-1">
+                      <AlertTriangle className="h-3 w-3" />
+                      O destinatário receberá alertas crescentes conforme o prazo se aproximar.
+                    </p>
+                  )}
                 </div>
                 <div className="space-y-1.5">
                   <Label>Mensagem</Label>
@@ -172,12 +223,14 @@ export default function MensagensPage() {
           {messages.map(msg => {
             const person = tab === 'inbox' ? msg.sender : msg.recipient
             const unread = tab === 'inbox' && !msg.readAt
+            const hasDeadline = tab === 'inbox' && msg.replyDeadline && !msg.readAt
             return (
               <Card key={msg.id}
                 onClick={() => router.push(`/mensagens/${msg.id}`)}
                 className={cn(
                   'rounded-xl border border-border shadow-none cursor-pointer transition-colors hover:bg-accent',
-                  unread && 'bg-primary/5 border-primary/20'
+                  unread && 'bg-primary/5 border-primary/20',
+                  hasDeadline && new Date(msg.replyDeadline!).getTime() - Date.now() < 2 * 3600_000 && 'border-red-300 bg-red-50'
                 )}>
                 <CardContent className="p-4 flex items-start gap-3">
                   <Avatar className="h-9 w-9 shrink-0 mt-0.5">
@@ -196,7 +249,10 @@ export default function MensagensPage() {
                           {ROLE_LABELS[person.role] ?? person.role}
                         </Badge>
                       </div>
-                      <span className="text-xs text-muted-foreground shrink-0">{timeAgo(msg.createdAt)}</span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {hasDeadline && <DeadlineBadge deadline={msg.replyDeadline!} />}
+                        <span className="text-xs text-muted-foreground">{timeAgo(msg.createdAt)}</span>
+                      </div>
                     </div>
                     <p className={cn('text-sm truncate', unread ? 'font-medium text-foreground' : 'text-foreground')}>
                       {msg.subject}

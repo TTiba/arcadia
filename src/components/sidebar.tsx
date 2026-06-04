@@ -46,15 +46,15 @@ const GROUP_ORDER = ['GESTÃO', 'PEDAGÓGICO', 'INTELIGÊNCIA']
 
 export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false)
+  const [unread, setUnread] = useState(0)
   const pathname = usePathname()
   const { data: session } = useSession()
   const role = (session?.user as any)?.role || ''
-  const [unread, setUnread] = useState(0)
 
   useEffect(() => {
     const fetchUnread = () => {
       fetch('/api/messages/unread-count')
-        .then(r => r.ok && r.json())
+        .then(r => r.ok ? r.json() : null)
         .then(d => d && setUnread(d.count))
     }
     fetchUnread()
@@ -171,7 +171,7 @@ export function Sidebar() {
                       <Icon className="h-[18px] w-[18px] shrink-0" />
                       {!collapsed && <span className="truncate leading-none flex-1">{item.label}</span>}
                       {!collapsed && item.href === '/mensagens' && unread > 0 && (
-                        <span className="ml-auto text-[10px] font-bold bg-primary text-primary-foreground rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
+                        <span className="text-[10px] font-bold bg-white/20 rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
                           {unread > 99 ? '99+' : unread}
                         </span>
                       )}
