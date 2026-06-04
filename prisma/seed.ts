@@ -76,6 +76,7 @@ async function main() {
   await prisma.activitySkillLink.deleteMany()
   await prisma.waygroundActivity.deleteMany()
   await prisma.lessonComment.deleteMany()
+  await prisma.message.deleteMany()
   await prisma.auditLog.deleteMany()
   await prisma.waygroundSync.deleteMany()
   await prisma.homeworkSubmission.deleteMany()
@@ -496,6 +497,47 @@ async function main() {
     { lessonId: lessonPort9B.id, teacherId: B.tchPort.id, classId: cls(B,'9','A').id, rating: 2, comment: 'Turma com defasagem maior do que o esperado para o 9º ano. Os textos precisam ser mais graduais. Sugiro iniciar com textos narrativos curtos antes de expor a textos argumentativos jornalísticos.' },
     { lessonId: lessonMat8B.id, teacherId: B.tchMat.id, classId: cls(B,'8','A').id, rating: 3, comment: 'A defasagem em pré-requisitos é o maior obstáculo. Sistemas de equações exigem segurança em equações simples, que parte da turma ainda não tem. Necessário plano de nivelamento antes de avançar no currículo.' },
   ] })
+
+  // ─── Demo messages ────────────────────────────────────────────────────────────
+  console.log('  Creating demo messages...')
+  const secretaria = await prisma.user.findUnique({ where: { email: 'secretaria@seduc.pr.gov.br' } })
+  const dirA = await prisma.user.findUnique({ where: { email: 'diretora@eeteixeira.pr.edu.br' } })
+
+  if (secretaria && dirA) {
+    const msg1 = await prisma.message.create({ data: {
+      senderId: secretaria.id, recipientId: dirA.id,
+      subject: 'Resultados SAEB 2024 — ação necessária',
+      body: 'Prezada Diretora Regina,\n\nOs dados preliminares do SAEB 2024 indicam que a Escola Estadual Prof. Anísio Teixeira apresenta 5% dos alunos do 9º ano abaixo do nível básico em Língua Portuguesa.\n\nSolicito a elaboração de um plano de intervenção pedagógica para os descritores com menor desempenho (LP9-D14 e MT9-D24) até o próximo bimestre.\n\nAtenciosamente,\nSecretaria de Educação do Paraná',
+      createdAt: new Date(2024, 4, 20),
+    }})
+    // Director replies
+    await prisma.message.create({ data: {
+      senderId: dirA.id, recipientId: secretaria.id,
+      subject: 'Re: Resultados SAEB 2024 — ação necessária',
+      body: 'Prezada Secretaria,\n\nAgradecemos o alerta. Já acionamos a equipe pedagógica para iniciar o mapeamento dos alunos em dificuldade. Enviaremos o plano de intervenção até 30/05.\n\nAtenciosamente,\nRegina Aparecida Mendes\nDiretora',
+      parentId: msg1.id, createdAt: new Date(2024, 4, 21),
+    }})
+
+    const msg2 = await prisma.message.create({ data: {
+      senderId: dirA.id, recipientId: A.pedUser.id,
+      subject: 'Alunos com busca ativa em aberto',
+      body: 'Marta,\n\nPreciso de um relatório consolidado dos alunos com busca ativa ainda em aberto. A Secretaria está solicitando atualização de todos os casos até sexta-feira.\n\nPor favor, priorize os alunos do 9º ano, pois são os que impactam o IDEB.\n\nObrigada,\nRegina',
+      createdAt: new Date(2024, 4, 22),
+    }})
+    await prisma.message.create({ data: {
+      senderId: A.pedUser.id, recipientId: dirA.id,
+      subject: 'Re: Alunos com busca ativa em aberto',
+      body: 'Diretora Regina,\n\nTemos atualmente 12 casos de busca ativa em aberto no 9º ano. Desses, 4 já têm retorno confirmado e 8 aguardam segundo contato. Envio o relatório completo por e-mail institucional ainda hoje.\n\nMarta Crisostomo\nPedagoga',
+      parentId: msg2.id, createdAt: new Date(2024, 4, 22),
+    }})
+
+    await prisma.message.create({ data: {
+      senderId: A.pedUser.id, recipientId: A.tPortU.id,
+      subject: 'Aluno com ausências — orientação',
+      body: 'Ana,\n\nGostaria de conversar sobre o aluno da sua turma 9A que acumula mais de 18 faltas. Após a reunião com a família, ficou combinado um acompanhamento semanal.\n\nPoderia me enviar uma observação sobre o desempenho dele nas últimas aulas? Isso vai compor o relatório para o Conselho Tutelar.\n\nGrata,\nMarta',
+      createdAt: new Date(2024, 4, 23),
+    }})
+  }
 
   console.log('\n✅ Demo seed complete!')
   console.log('\n📊 Summary:')

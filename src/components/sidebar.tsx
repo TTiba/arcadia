@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { signOut, useSession } from 'next-auth/react'
@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils'
 import {
   GraduationCap, LayoutDashboard, Users, BookOpen, School,
   ClipboardList, FileText, CheckSquare, Star, Heart,
-  LogOut, ChevronLeft, ChevronRight, UserCheck, Sparkles,
+  LogOut, ChevronLeft, ChevronRight, UserCheck, Sparkles, MessageSquare,
 } from 'lucide-react'
 import { Avatar, AvatarFallback } from './ui/avatar'
 import { ROLE_LABELS } from '@/lib/utils'
@@ -23,6 +23,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   // GESTÃO
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, group: 'GESTÃO' },
+  { href: '/mensagens', label: 'Mensagens', icon: MessageSquare, group: 'GESTÃO' },
   { href: '/admin/turmas', label: 'Turmas', icon: School, roles: ['ADMIN', 'COORDENACAO'], group: 'GESTÃO' },
   { href: '/admin/professores', label: 'Professores', icon: Users, roles: ['ADMIN', 'COORDENACAO'], group: 'GESTÃO' },
   { href: '/admin/alunos', label: 'Alunos', icon: UserCheck, roles: ['ADMIN', 'COORDENACAO'], group: 'GESTÃO' },
@@ -48,6 +49,18 @@ export function Sidebar() {
   const pathname = usePathname()
   const { data: session } = useSession()
   const role = (session?.user as any)?.role || ''
+  const [unread, setUnread] = useState(0)
+
+  useEffect(() => {
+    const fetchUnread = () => {
+      fetch('/api/messages/unread-count')
+        .then(r => r.ok && r.json())
+        .then(d => d && setUnread(d.count))
+    }
+    fetchUnread()
+    const interval = setInterval(fetchUnread, 30000)
+    return () => clearInterval(interval)
+  }, [])
 
   const visibleItems = navItems.filter(item => !item.roles || item.roles.includes(role))
 
@@ -156,7 +169,12 @@ export function Sidebar() {
                       )}
                     >
                       <Icon className="h-[18px] w-[18px] shrink-0" />
-                      {!collapsed && <span className="truncate leading-none">{item.label}</span>}
+                      {!collapsed && <span className="truncate leading-none flex-1">{item.label}</span>}
+                      {!collapsed && item.href === '/mensagens' && unread > 0 && (
+                        <span className="ml-auto text-[10px] font-bold bg-primary text-primary-foreground rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
+                          {unread > 99 ? '99+' : unread}
+                        </span>
+                      )}
                     </Link>
                   )
                 })}

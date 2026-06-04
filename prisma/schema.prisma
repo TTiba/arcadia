@@ -26,6 +26,8 @@ model User {
   gradeRecords        GradeRecord[]
   auditLogs           AuditLog[]
   userDashboards      UserDashboard[]
+  sentMessages     Message[] @relation("SentMessages")
+  receivedMessages Message[] @relation("ReceivedMessages")
 
   @@map("users")
 }
@@ -629,6 +631,26 @@ model DashboardBlock {
   updatedAt   DateTime @updatedAt
 
   @@map("dashboard_blocks")
+}
+
+// ─── Messaging ───────────────────────────────────────────────────────────────
+
+model Message {
+  id          String    @id @default(cuid())
+  senderId    String
+  recipientId String
+  subject     String
+  body        String
+  readAt      DateTime?
+  parentId    String?
+  createdAt   DateTime  @default(now())
+
+  sender    User      @relation("SentMessages",     fields: [senderId],    references: [id], onDelete: Cascade)
+  recipient User      @relation("ReceivedMessages", fields: [recipientId], references: [id], onDelete: Cascade)
+  parent    Message?  @relation("MessageThread", fields: [parentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  replies   Message[] @relation("MessageThread")
+
+  @@map("messages")
 }
 
 // ─── Audit Log ────────────────────────────────────────────────────────────────
