@@ -20,7 +20,7 @@ function buildBreadcrumb(pathname: string): string {
     notas: 'Notas',
     pedagogo: 'Pedagogo',
     registros: 'Registros',
-    'meu-arcadia': 'Meu Arcadia',
+    'meu-vela': 'Meu Vela',
     ai: 'IA',
     assistente: 'Assistente IA',
   }

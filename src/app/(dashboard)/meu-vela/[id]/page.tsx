@@ -25,7 +25,7 @@ export default function DashboardViewPage() {
     setLoading(true)
     try {
       const res = await fetch(`/api/dashboards/${id}`)
-      if (!res.ok) { router.push('/meu-arcadia'); return }
+      if (!res.ok) { router.push('/meu-vela'); return }
       setPayload(await res.json())
     } finally {
       setLoading(false)
@@ -48,7 +48,7 @@ export default function DashboardViewPage() {
     if (!confirm('Excluir este dashboard?')) return
     await fetch(`/api/dashboards/${id}`, { method: 'DELETE' })
     toast({ title: 'Dashboard excluído.' })
-    router.push('/meu-arcadia')
+    router.push('/meu-vela')
   }
 
   if (loading) {
@@ -67,7 +67,7 @@ export default function DashboardViewPage() {
     <div className="p-6 space-y-6">
       {/* Header */}
       <div className="flex items-start gap-4">
-        <Button variant="ghost" size="icon" onClick={() => router.push('/meu-arcadia')} className="shrink-0 mt-0.5">
+        <Button variant="ghost" size="icon" onClick={() => router.push('/meu-vela')} className="shrink-0 mt-0.5">
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <div className="flex-1 min-w-0">

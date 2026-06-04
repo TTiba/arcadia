@@ -30,7 +30,7 @@ const INSPIRATIONS = [
   'Alunos com baixo desempenho em notas e SAEB combinados',
 ]
 
-export default function MeuArcadiaPage() {
+export default function MeuVelaPage() {
   const { data: session } = useSession()
   const router = useRouter()
   const { toast } = useToast()
@@ -87,7 +87,7 @@ export default function MeuArcadiaPage() {
       setPreview(null)
       setPrompt('')
       fetchDashboards()
-      router.push(`/meu-arcadia/${data.id}`)
+      router.push(`/meu-vela/${data.id}`)
     } catch (e: any) {
       toast({ title: e.message || 'Erro ao salvar', variant: 'destructive' })
     } finally {
@@ -120,7 +120,7 @@ export default function MeuArcadiaPage() {
       <div>
         <h1 className="text-2xl font-bold flex items-center gap-2">
           <Sparkles className="h-6 w-6 text-violet-600" />
-          Meu Arcadia
+          Meu Vela
         </h1>
         <p className="text-muted-foreground text-sm mt-1">
           Descreva o que quer ver e a IA cria um dashboard personalizado só para {firstName}.
@@ -234,7 +234,7 @@ function DashboardCard({ d, onPin, onDelete, router }: {
   return (
     <Card
       className="cursor-pointer hover:border-violet-300 hover:shadow-md transition-all group"
-      onClick={() => router.push(`/meu-arcadia/${d.id}`)}
+      onClick={() => router.push(`/meu-vela/${d.id}`)}
     >
       <CardContent className="p-4">
         <div className="flex items-start justify-between gap-2">

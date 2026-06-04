@@ -599,7 +599,7 @@ model WaygroundQuestionStat {
   @@map("wayground_question_stats")
 }
 
-// ─── User Dashboards (Meu Arcadia) ───────────────────────────────────────────
+// ─── User Dashboards (Meu Vela) ──────────────────────────────────────────────
 
 model UserDashboard {
   id          String   @id @default(cuid())

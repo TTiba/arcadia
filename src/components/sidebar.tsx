@@ -37,7 +37,7 @@ const navItems: NavItem[] = [
   // PEDAGÓGICO
   { href: '/pedagogo/registros', label: 'Registros Pedagógicos', icon: Heart, roles: ['PEDAGOGO', 'COORDENACAO'], group: 'PEDAGÓGICO' },
   // INTELIGÊNCIA
-  { href: '/meu-arcadia', label: 'Meu Arcadia', icon: Sparkles, group: 'INTELIGÊNCIA' },
+  { href: '/meu-vela', label: 'Meu Vela', icon: Sparkles, group: 'INTELIGÊNCIA' },
   { href: '/ai/assistente', label: 'Assistente IA', icon: Sparkles, group: 'INTELIGÊNCIA' },
 ]
 
@@ -91,7 +91,7 @@ export function Sidebar() {
               className="font-serif text-lg font-semibold tracking-wide"
               style={{ color: 'hsl(45 20% 92%)' }}
             >
-              Arcadia
+              Vela
             </span>
           </div>
         )}

@@ -68,7 +68,7 @@ const BUSCA_TEXTS = [
 const RESP_NAMES = ['a mãe, Sra. Maria','o pai, Sr. José','a avó, Sra. Conceição','a tia, Sra. Márcia','o pai, Sr. Paulo','a mãe, Sra. Rosana','o responsável, Sr. Antônio']
 
 async function main() {
-  console.log('🌱 Seeding Arcadia Demo DB (Paraná — two schools)...')
+  console.log('🌱 Seeding Vela Demo DB (Paraná — two schools)...')
 
   // ─── Cleanup ──────────────────────────────────────────────────────────────────
   await prisma.waygroundQuestionStat.deleteMany()

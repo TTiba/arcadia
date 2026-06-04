@@ -9,7 +9,7 @@ const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 // System prompt is intentionally short — blocks carry the complexity,
 // so the AI only needs to select IDs + params (tiny output = few tokens).
 function buildSystemPrompt() {
-  return `Você é o gerador de dashboards do Arcadia (sistema de gestão escolar).
+  return `Você é o gerador de dashboards do Vela (sistema de gestão escolar).
 
 Retorne SOMENTE um JSON compacto selecionando os blocos que melhor atendem o pedido.
 

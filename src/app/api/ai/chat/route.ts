@@ -173,7 +173,7 @@ export async function POST(req: NextRequest) {
 
   const schoolData = await buildSchoolContext()
 
-  const systemPrompt = `Você é o Assistente Pedagógico Arcadia — especializado em análise de dados educacionais para secretarias e gestores escolares.
+  const systemPrompt = `Você é o Assistente Pedagógico Vela — especializado em análise de dados educacionais para secretarias e gestores escolares.
 
 CONTEXTO DO SISTEMA (${new Date().toLocaleDateString('pt-BR')}):
 ${JSON.stringify(schoolData, null, 0)}

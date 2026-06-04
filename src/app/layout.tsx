@@ -4,7 +4,7 @@ import { Toaster } from '@/components/ui/toaster'
 import { AuthProvider } from '@/components/auth-provider'
 
 export const metadata: Metadata = {
-  title: 'Arcadia - Gestão Escolar',
+  title: 'Vela - Gestão Escolar',
   description: 'Sistema de gestão e distribuição de aulas para escolas',
 }
 

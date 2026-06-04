@@ -181,7 +181,7 @@ export default function AssistentePage() {
   const [messages, setMessages] = useState<Message[]>([
     {
       role: 'assistant',
-      content: `Olá, ${session?.user?.name?.split(' ')[0] || 'professor(a)'}! 👋\n\nSou o **Assistente Pedagógico Arcadia**. Posso analisar os dados da escola e gerar relatórios sobre:\n\n- Desempenho dos alunos nos descritores do **SAEB**\n- Resultados por competência do **ENEM**\n- Adesão às tarefas de casa\n- Registros pedagógicos e alertas\n- Relatórios por turma, componente ou aluno\n\nComo posso ajudar?`,
+      content: `Olá, ${session?.user?.name?.split(' ')[0] || 'professor(a)'}! 👋\n\nSou o **Assistente Pedagógico Vela**. Posso analisar os dados da escola e gerar relatórios sobre:\n\n- Desempenho dos alunos nos descritores do **SAEB**\n- Resultados por competência do **ENEM**\n- Adesão às tarefas de casa\n- Registros pedagógicos e alertas\n- Relatórios por turma, componente ou aluno\n\nComo posso ajudar?`,
     }
   ])
   const [input, setInput] = useState('')

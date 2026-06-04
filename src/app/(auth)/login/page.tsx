@@ -53,7 +53,7 @@ export default function LoginPage() {
               <GraduationCap className="h-10 w-10 text-white" />
             </div>
           </div>
-          <CardTitle className="text-3xl font-bold text-gray-900">Arcadia</CardTitle>
+          <CardTitle className="text-3xl font-bold text-gray-900">Vela</CardTitle>
           <CardDescription className="text-base">Sistema de Gestão Escolar</CardDescription>
         </CardHeader>
         <CardContent className="pt-4">
@@ -90,10 +90,10 @@ export default function LoginPage() {
           <div className="mt-6 p-4 bg-muted rounded-lg">
             <p className="text-xs font-semibold text-muted-foreground mb-2">Contas de demonstração:</p>
             <div className="space-y-1 text-xs text-muted-foreground">
-              <p><span className="font-medium">Admin:</span> admin@arcadia.edu.br / admin123</p>
-              <p><span className="font-medium">Professor:</span> ana@arcadia.edu.br / prof123</p>
-              <p><span className="font-medium">Pedagogo:</span> pedagoga@arcadia.edu.br / ped123</p>
-              <p><span className="font-medium">Coord:</span> coord@arcadia.edu.br / coord123</p>
+              <p><span className="font-medium">Secretaria:</span> secretaria@seduc.pr.gov.br / seduc2024</p>
+              <p><span className="font-medium">Diretora A:</span> diretora@eeteixeira.pr.edu.br / admin123</p>
+              <p><span className="font-medium">Pedagoga A:</span> pedagoga@eeteixeira.pr.edu.br / ped123</p>
+              <p><span className="font-medium">Prof. LP:</span> ana.batista@eeteixeira.pr.edu.br / prof123</p>
             </div>
           </div>
         </CardContent>
