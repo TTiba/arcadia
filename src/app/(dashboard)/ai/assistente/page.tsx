@@ -1,12 +1,13 @@
 'use client'
 import React, { useState, useRef, useEffect } from 'react'
-import { useSession } from 'next-auth/react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Bot, Send, User, Loader2, Sparkles, AlertCircle } from 'lucide-react'
+import { Bot, Send, User, Loader2, Sparkles, AlertCircle, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+
+const STORAGE_KEY = 'vela_chat_history'
 
 interface Message {
   role: 'user' | 'assistant'
@@ -176,22 +177,43 @@ function MessageContent({ content }: { content: string }) {
   return <div className="space-y-0.5">{blocks}</div>
 }
 
-export default function AssistentePage() {
-  const { data: session } = useSession()
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      role: 'assistant',
-      content: `Olá, ${session?.user?.name?.split(' ')[0] || 'professor(a)'}! 👋\n\nSou o **Assistente Pedagógico Vela**. Posso analisar os dados da escola e gerar relatórios sobre:\n\n- Desempenho dos alunos nos descritores do **SAEB**\n- Resultados por competência do **ENEM**\n- Adesão às tarefas de casa\n- Registros pedagógicos e alertas\n- Relatórios por turma, componente ou aluno\n\nComo posso ajudar?`,
+const WELCOME_CONTENT = `Olá! 👋\n\nSou o **Assistente Pedagógico Vela**. Posso analisar os dados da escola e gerar relatórios sobre:\n\n- Desempenho dos alunos nos descritores do **SAEB**\n- Resultados por competência do **ENEM**\n- Adesão às tarefas de casa\n- Registros pedagógicos e alertas\n- Relatórios por turma, componente ou aluno\n\nComo posso ajudar?`
+
+function loadStoredMessages(): Message[] {
+  if (typeof window === 'undefined') return []
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY)
+    if (stored) {
+      const parsed = JSON.parse(stored)
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed
     }
-  ])
+  } catch {}
+  return []
+}
+
+export default function AssistentePage() {
+  const [messages, setMessages] = useState<Message[]>(() => {
+    const stored = loadStoredMessages()
+    return stored.length > 0 ? stored : [{ role: 'assistant', content: WELCOME_CONTENT }]
+  })
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
 
+  // Persist history to localStorage on every change
+  useEffect(() => {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(messages)) } catch {}
+  }, [messages])
+
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
+
+  const clearHistory = () => {
+    localStorage.removeItem(STORAGE_KEY)
+    setMessages([{ role: 'assistant', content: WELCOME_CONTENT }])
+  }
 
   const sendMessage = async (text?: string) => {
     const content = (text || input).trim()
@@ -238,9 +260,22 @@ export default function AssistentePage() {
           <h1 className="text-xl font-bold">Assistente Pedagógico</h1>
           <p className="text-sm text-muted-foreground">Análise de dados escolares com IA · SAEB · ENEM · Relatórios</p>
         </div>
-        <Badge variant="outline" className="ml-auto text-violet-700 border-violet-300 bg-violet-50">
-          Claude AI
-        </Badge>
+        <div className="ml-auto flex items-center gap-2">
+          <Badge variant="outline" className="text-violet-700 border-violet-300 bg-violet-50">
+            Claude AI
+          </Badge>
+          {messages.length > 1 && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={clearHistory}
+              title="Limpar conversa"
+              className="text-gray-400 hover:text-red-500"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Error banner */}
