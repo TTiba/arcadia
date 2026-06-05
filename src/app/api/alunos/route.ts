@@ -9,18 +9,47 @@ export async function GET(req: NextRequest) {
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { searchParams } = new URL(req.url)
-  const classId = searchParams.get('classId')
-  const search = searchParams.get('search')
+  const classId  = searchParams.get('classId')  || undefined
+  const gradeId  = searchParams.get('gradeId')  || undefined
+  const status   = searchParams.get('status')   || undefined
+  const search   = searchParams.get('search')   || undefined
+  const subjectId = searchParams.get('subjectId') || undefined
+  const dateFrom  = searchParams.get('dateFrom')  || undefined
+  const dateTo    = searchParams.get('dateTo')    || undefined
+
+  const hwWhere = {
+    ...(subjectId ? { subjectId } : {}),
+    ...(dateFrom || dateTo ? {
+      dueDate: {
+        ...(dateFrom ? { gte: new Date(dateFrom) } : {}),
+        ...(dateTo   ? { lte: new Date(dateTo)   } : {}),
+      }
+    } : {}),
+  }
 
   const students = await prisma.student.findMany({
     where: {
       ...(classId ? { classId } : {}),
-      ...(search ? { name: { contains: search } } : {}),
+      ...(gradeId ? { class: { gradeId } } : {}),
+      ...(status  ? { status } : {}),
+      ...(search  ? { OR: [{ name: { contains: search } }, { enrollment: { contains: search } }] } : {}),
     },
     include: {
-      class: { include: { grade: true } },
+      class: {
+        include: {
+          grade: true,
+          _count: { select: { homework: Object.keys(hwWhere).length ? { where: hwWhere } : true } },
+        },
+      },
       guardians: true,
-      _count: { select: { homeworkSubmissions: true, gradeRecords: true } }
+      _count: {
+        select: {
+          homeworkSubmissions: Object.keys(hwWhere).length
+            ? { where: { homework: hwWhere } }
+            : true,
+          gradeRecords: true,
+        },
+      },
     },
     orderBy: { name: 'asc' },
   })

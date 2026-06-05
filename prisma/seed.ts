@@ -438,37 +438,55 @@ async function main() {
   })
   for (let i = 0; i < enemData.length; i += 100) await prisma.studentEnemPerformance.createMany({ data: enemData.slice(i, i + 100) })
 
-  // ─── Homework + submissions ───────────────────────────────────────────────────
+  // ─── Homework + submissions (per-student profiles) ───────────────────────────
   console.log('  Creating homework and submissions...')
-  type HwTask = { classId: string; subjectId: string; title: string; instructions: string; dueDate: Date; rate: number }
+  type HwTask = { classId: string; subjectId: string; title: string; instructions: string; dueDate: Date }
+
+  // Profile: 70% ALL tasks done, 20% PARTIAL (30–70%), 10% NONE
+  function hwProfile(studentPos: number): 'ALL' | 'PARTIAL' | 'NONE' {
+    const v = Math.abs(Math.sin(studentPos * 5.77 + 1.3)) % 1
+    if (v < 0.70) return 'ALL'
+    if (v < 0.90) return 'PARTIAL'
+    return 'NONE'
+  }
+
   const hwTasks: HwTask[] = [
-    { classId: cls(A,'9','A').id, subjectId: subPort.id, title: 'Análise de crônica — "A Bolsa Amarela"', instructions: 'Identifique narrador, tempo e espaço. Escreva parágrafo sobre o tema central.', dueDate: new Date(2024, 2, 18), rate: 0.88 },
-    { classId: cls(A,'9','A').id, subjectId: subMat.id,  title: 'Exercícios: Funções do 1º Grau',         instructions: 'Resolva os exercícios 1 a 8 da lista entregue em sala.', dueDate: new Date(2024, 2, 15), rate: 0.80 },
-    { classId: cls(A,'9','A').id, subjectId: subPort.id, title: 'Produção textual: mini-crônica',          instructions: 'Escreva uma crônica de 15 a 20 linhas sobre um acontecimento do cotidiano escolar.', dueDate: new Date(2024, 2, 25), rate: 0.75 },
-    { classId: cls(A,'9','B').id, subjectId: subPort.id, title: 'Interpretação: "A Cartomante" (Machado)', instructions: 'Responda as questões com argumentação. Mínimo 3 linhas por resposta.', dueDate: new Date(2024, 2, 20), rate: 0.70 },
-    { classId: cls(A,'9','B').id, subjectId: subMat.id,  title: 'Gráficos de funções quadráticas',        instructions: 'Esboce os gráficos das 6 funções e identifique vértice e raízes.', dueDate: new Date(2024, 3, 5), rate: 0.65 },
-    { classId: cls(A,'8','A').id, subjectId: subMat.id,  title: 'Lista: Equações do 2º Grau',             instructions: 'Resolva as 10 equações com Bhaskara. Mostre o desenvolvimento completo.', dueDate: new Date(2024, 3, 10), rate: 0.60 },
-    { classId: cls(A,'8','A').id, subjectId: subCien.id, title: 'Pesquisa: Biomas Brasileiros',            instructions: 'Apresente 3 biomas: características, fauna, flora e ameaças. Uma página cada.', dueDate: new Date(2024, 3, 15), rate: 0.55 },
-    { classId: cls(A,'7','A').id, subjectId: subCien.id, title: 'Mapa de cadeia alimentar',               instructions: 'Elabore mapa conceitual de uma cadeia alimentar do Cerrado com todos os níveis.', dueDate: new Date(2024, 2, 18), rate: 0.78 },
-    { classId: cls(A,'7','A').id, subjectId: subHist.id, title: 'Linha do tempo: Brasil Colonial',        instructions: 'Construa linha do tempo ilustrada dos principais eventos coloniais (1500-1822).', dueDate: new Date(2024, 3, 20), rate: 0.72 },
-    { classId: cls(A,'5','A').id, subjectId: subPort.id, title: 'Caligrafia e ortografia — lista 4',      instructions: 'Escreva cada palavra 3 vezes e use-a em uma frase completa.', dueDate: new Date(2024, 2, 14), rate: 0.92 },
-    { classId: cls(A,'5','A').id, subjectId: subMat.id,  title: 'Tabuada do 6 ao 9 — exercícios',        instructions: 'Resolva os 30 exercícios de multiplicação e divisão da folha entregue.', dueDate: new Date(2024, 2, 12), rate: 0.85 },
-    { classId: cls(B,'9','A').id, subjectId: subPort.id, title: 'Exercícios de inferência',               instructions: 'Leia o texto e responda as 8 questões de inferência com justificativa.', dueDate: new Date(2024, 2, 18), rate: 0.52 },
-    { classId: cls(B,'9','A').id, subjectId: subMat.id,  title: 'Sistemas de equações — prática',        instructions: 'Resolva 6 sistemas pelo método de substituição. Mostre todos os passos.', dueDate: new Date(2024, 3, 10), rate: 0.45 },
-    { classId: cls(B,'8','A').id, subjectId: subMat.id,  title: 'Revisão: equações do 1º grau',          instructions: 'Lista de 12 equações. Foco no isolamento da variável.', dueDate: new Date(2024, 3, 8), rate: 0.40 },
-    { classId: cls(B,'9','A').id, subjectId: subCien.id, title: 'Tabela de Punnett — herança genética',  instructions: 'Complete as 5 tabelas de Punnett e calcule as probabilidades fenotípicas.', dueDate: new Date(2024, 3, 15), rate: 0.58 },
-    { classId: cls(B,'9','B').id, subjectId: subPort.id, title: 'Artigo de opinião: redes sociais',      instructions: 'Escreva artigo de 20 linhas com tese, 2 argumentos e proposta de intervenção.', dueDate: new Date(2024, 3, 22), rate: 0.62 },
-    { classId: cls(B,'7','A').id, subjectId: subMat.id,  title: 'Operações com inteiros negativos',      instructions: 'Resolva os 15 exercícios de adição e subtração com números negativos.', dueDate: new Date(2024, 3, 14), rate: 0.68 },
+    { classId: cls(A,'9','A').id, subjectId: subPort.id, title: 'Análise de crônica — "A Bolsa Amarela"', instructions: 'Identifique narrador, tempo e espaço. Escreva parágrafo sobre o tema central.', dueDate: new Date(2024, 2, 18) },
+    { classId: cls(A,'9','A').id, subjectId: subMat.id,  title: 'Exercícios: Funções do 1º Grau',         instructions: 'Resolva os exercícios 1 a 8 da lista entregue em sala.', dueDate: new Date(2024, 2, 15) },
+    { classId: cls(A,'9','A').id, subjectId: subPort.id, title: 'Produção textual: mini-crônica',          instructions: 'Escreva uma crônica de 15 a 20 linhas sobre um acontecimento do cotidiano escolar.', dueDate: new Date(2024, 2, 25) },
+    { classId: cls(A,'9','B').id, subjectId: subPort.id, title: 'Interpretação: "A Cartomante" (Machado)', instructions: 'Responda as questões com argumentação. Mínimo 3 linhas por resposta.', dueDate: new Date(2024, 2, 20) },
+    { classId: cls(A,'9','B').id, subjectId: subMat.id,  title: 'Gráficos de funções quadráticas',        instructions: 'Esboce os gráficos das 6 funções e identifique vértice e raízes.', dueDate: new Date(2024, 3, 5) },
+    { classId: cls(A,'8','A').id, subjectId: subMat.id,  title: 'Lista: Equações do 2º Grau',             instructions: 'Resolva as 10 equações com Bhaskara. Mostre o desenvolvimento completo.', dueDate: new Date(2024, 3, 10) },
+    { classId: cls(A,'8','A').id, subjectId: subCien.id, title: 'Pesquisa: Biomas Brasileiros',            instructions: 'Apresente 3 biomas: características, fauna, flora e ameaças. Uma página cada.', dueDate: new Date(2024, 3, 15) },
+    { classId: cls(A,'7','A').id, subjectId: subCien.id, title: 'Mapa de cadeia alimentar',               instructions: 'Elabore mapa conceitual de uma cadeia alimentar do Cerrado com todos os níveis.', dueDate: new Date(2024, 2, 18) },
+    { classId: cls(A,'7','A').id, subjectId: subHist.id, title: 'Linha do tempo: Brasil Colonial',        instructions: 'Construa linha do tempo ilustrada dos principais eventos coloniais (1500-1822).', dueDate: new Date(2024, 3, 20) },
+    { classId: cls(A,'5','A').id, subjectId: subPort.id, title: 'Caligrafia e ortografia — lista 4',      instructions: 'Escreva cada palavra 3 vezes e use-a em uma frase completa.', dueDate: new Date(2024, 2, 14) },
+    { classId: cls(A,'5','A').id, subjectId: subMat.id,  title: 'Tabuada do 6 ao 9 — exercícios',        instructions: 'Resolva os 30 exercícios de multiplicação e divisão da folha entregue.', dueDate: new Date(2024, 2, 12) },
+    { classId: cls(B,'9','A').id, subjectId: subPort.id, title: 'Exercícios de inferência',               instructions: 'Leia o texto e responda as 8 questões de inferência com justificativa.', dueDate: new Date(2024, 2, 18) },
+    { classId: cls(B,'9','A').id, subjectId: subMat.id,  title: 'Sistemas de equações — prática',        instructions: 'Resolva 6 sistemas pelo método de substituição. Mostre todos os passos.', dueDate: new Date(2024, 3, 10) },
+    { classId: cls(B,'8','A').id, subjectId: subMat.id,  title: 'Revisão: equações do 1º grau',          instructions: 'Lista de 12 equações. Foco no isolamento da variável.', dueDate: new Date(2024, 3, 8) },
+    { classId: cls(B,'9','A').id, subjectId: subCien.id, title: 'Tabela de Punnett — herança genética',  instructions: 'Complete as 5 tabelas de Punnett e calcule as probabilidades fenotípicas.', dueDate: new Date(2024, 3, 15) },
+    { classId: cls(B,'9','B').id, subjectId: subPort.id, title: 'Artigo de opinião: redes sociais',      instructions: 'Escreva artigo de 20 linhas com tese, 2 argumentos e proposta de intervenção.', dueDate: new Date(2024, 3, 22) },
+    { classId: cls(B,'7','A').id, subjectId: subMat.id,  title: 'Operações com inteiros negativos',      instructions: 'Resolva os 15 exercícios de adição e subtração com números negativos.', dueDate: new Date(2024, 3, 14) },
   ]
 
-  for (const hw of hwTasks) {
+  for (let taskIdx = 0; taskIdx < hwTasks.length; taskIdx++) {
+    const hw = hwTasks[taskIdx]
     const hwRec = await prisma.homework.create({
       data: { classId: hw.classId, subjectId: hw.subjectId, title: hw.title, instructions: hw.instructions, dueDate: hw.dueDate },
     })
-    const studs = await prisma.student.findMany({ where: { classId: hw.classId }, select: { id: true } })
+    const studs = await prisma.student.findMany({ where: { classId: hw.classId }, select: { id: true }, orderBy: { enrollment: 'asc' } })
     const subs: any[] = []
     studs.forEach((s, i) => {
-      if (Math.abs(Math.sin(i * 4.13 + hw.rate * 10)) % 1 < hw.rate) {
+      const profile = hwProfile(i)
+      let submit = false
+      if (profile === 'ALL') {
+        submit = true
+      } else if (profile === 'PARTIAL') {
+        const rate = 0.30 + Math.abs(Math.sin(i * 2.13 + 0.5)) % 1 * 0.40
+        submit = Math.abs(Math.sin(i * 4.13 + taskIdx * 3.7)) % 1 < rate
+      }
+      if (submit) {
         subs.push({
           homeworkId: hwRec.id, studentId: s.id, waygroundStatus: 'ENTREGUE',
           submittedAt: new Date(hw.dueDate.getTime() - Math.floor(Math.abs(Math.sin(i * 1.7)) * 2) * 86400000),
