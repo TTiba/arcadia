@@ -111,6 +111,7 @@ model Class {
   classRecords   ClassRecord[]
   assessments    Assessment[]
   homework       Homework[]
+  attendances    StudentAttendance[]
 
   @@map("classes")
 }
@@ -194,6 +195,7 @@ model Student {
   saebPerformances       StudentSaebPerformance[]
   enemPerformances       StudentEnemPerformance[]
   waygroundResults       WaygroundStudentResult[]
+  attendances            StudentAttendance[]
 
   @@map("students")
 }
@@ -671,4 +673,25 @@ model Message {
   replies   Message[] @relation("MessageThread")
 
   @@map("messages")
+}
+
+// ─── Attendance ───────────────────────────────────────────────────────────────
+
+model StudentAttendance {
+  id            String   @id @default(cuid())
+  studentId     String
+  classId       String
+  date          DateTime
+  status        String   @default("FALTA")
+  justification String?
+  recordedBy    String
+  justifiedBy   String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  class   Class   @relation(fields: [classId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, date])
+  @@map("student_attendances")
 }

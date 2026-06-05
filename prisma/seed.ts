@@ -99,6 +99,7 @@ async function main() {
   await prisma.studentGuardian.deleteMany()
   await prisma.studentSaebPerformance.deleteMany()
   await prisma.studentEnemPerformance.deleteMany()
+  await prisma.studentAttendance.deleteMany()
   await prisma.student.deleteMany()
   await prisma.teacherClass.deleteMany()
   await prisma.teacherSubject.deleteMany()
@@ -704,6 +705,64 @@ async function main() {
             : null,
         })),
       })
+    }
+  }
+
+  // ─── Attendance records (past 30 school days) ─────────────────────────────────
+  console.log('  Creating attendance records...')
+
+  function schoolDaysBefore(count: number, from: Date): Date[] {
+    const days: Date[] = []
+    const d = new Date(from)
+    while (days.length < count) {
+      d.setDate(d.getDate() - 1)
+      if (d.getDay() !== 0 && d.getDay() !== 6) days.unshift(new Date(d))
+    }
+    return days
+  }
+
+  const attDays = schoolDaysBefore(30, new Date(2026, 5, 5))
+
+  for (const school of [A, B]) {
+    // Record attendance for 9th + 7th grade (representative sample)
+    const clsToRecord = school.allClasses.filter(c => c.code === '9' || c.code === '7')
+
+    for (const cls of clsToRecord) {
+      const students = await prisma.student.findMany({
+        where: { classId: cls.id },
+        select: { id: true },
+        orderBy: { enrollment: 'asc' },
+      })
+
+      const recs: {
+        studentId: string; classId: string; date: Date
+        status: string; justification: string | null
+        recordedBy: string; justifiedBy: string | null
+      }[] = []
+
+      for (const day of attDays) {
+        for (let i = 0; i < students.length; i++) {
+          const s = students[i]
+          const isAtRisk = i % 10 === 0
+          const veryAtRisk = i % 30 === 0
+          const absenceProb = veryAtRisk ? 0.40 : isAtRisk ? 0.22 : 0.06
+
+          const roll = Math.abs(Math.sin(i * 7.13 + day.getDate() * 3.97 + day.getMonth() * 11.3)) % 1
+          if (roll < absenceProb) {
+            const isJustified = roll < absenceProb * 0.2
+            recs.push({
+              studentId: s.id, classId: cls.id, date: day,
+              status: isJustified ? 'FALTA_JUSTIFICADA' : 'FALTA',
+              justification: isJustified ? 'Atestado médico apresentado à secretaria.' : null,
+              recordedBy: school.tPortU.id,
+              justifiedBy: isJustified ? school.pedUser.id : null,
+            })
+          }
+        }
+      }
+
+      for (let i = 0; i < recs.length; i += 100)
+        await prisma.studentAttendance.createMany({ data: recs.slice(i, i + 100) })
     }
   }
 

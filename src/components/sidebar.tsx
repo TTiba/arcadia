@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils'
 import {
   GraduationCap, LayoutDashboard, Users, BookOpen, School,
   ClipboardList, FileText, CheckSquare, Star, Heart,
-  LogOut, ChevronLeft, ChevronRight, UserCheck, Sparkles, MessageSquare,
+  LogOut, ChevronLeft, ChevronRight, UserCheck, Sparkles, MessageSquare, CalendarCheck,
 } from 'lucide-react'
 import { Avatar, AvatarFallback } from './ui/avatar'
 import { ROLE_LABELS } from '@/lib/utils'
@@ -34,7 +34,9 @@ const navItems: NavItem[] = [
   { href: '/professor/registro-aula', label: 'Registro de Aula', icon: ClipboardList, roles: ['PROFESSOR'], group: 'GESTÃO' },
   { href: '/professor/tarefas', label: 'Tarefas de Casa', icon: CheckSquare, roles: ['PROFESSOR'], group: 'GESTÃO' },
   { href: '/professor/notas', label: 'Notas', icon: Star, roles: ['PROFESSOR'], group: 'GESTÃO' },
+  { href: '/professor/chamada', label: 'Chamada', icon: CalendarCheck, roles: ['PROFESSOR'], group: 'GESTÃO' },
   { href: '/admin/alunos', label: 'Alunos', icon: UserCheck, roles: ['PEDAGOGO'], group: 'GESTÃO' },
+  { href: '/frequencia', label: 'Frequência', icon: CalendarCheck, roles: ['ADMIN', 'COORDENACAO', 'PEDAGOGO'], group: 'GESTÃO' },
   // PEDAGÓGICO
   { href: '/pedagogo/registros', label: 'Registros Pedagógicos', icon: Heart, roles: ['PEDAGOGO', 'COORDENACAO'], group: 'PEDAGÓGICO' },
   // INTELIGÊNCIA

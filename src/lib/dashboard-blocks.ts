@@ -139,6 +139,14 @@ export const BLOCK_LIBRARY: Record<string, Block> = {
       { type: 'PROGRESS_BARS', title: 'Registros Pedagógicos por Tipo', dataKey: 'registros_pedagogicos', size: 'md' },
     ],
   },
+
+  attendance_overview: {
+    name: 'Frequência Escolar',
+    description: 'Alunos com faltas acima do limite nos últimos 30 dias. Params: classId, days (padrão 30)',
+    widgets: [
+      { type: 'ALERT_LIST', title: 'Alunos com Baixa Frequência', dataKey: 'frequencia_turma', size: 'full' },
+    ],
+  },
 }
 
 // ─── Dynamic Block Resolution ─────────────────────────────────────────────────
@@ -157,7 +165,7 @@ const VALID_DATA_KEYS = [
   'notas_media_turma', 'notas_alunos_baixo_desempenho',
   'tarefas_adesao', 'tarefas_pendentes',
   'registros_pedagogicos', 'alunos_risco', 'atividade_professores',
-  'comparativo_turmas', 'total_alunos',
+  'comparativo_turmas', 'total_alunos', 'frequencia_turma',
 ]
 
 const VALID_TYPES = ['METRIC', 'LIST', 'PROGRESS_BARS', 'TABLE', 'ALERT_LIST']

@@ -51,6 +51,8 @@ async function buildSchoolContext() {
   const escolas = await Promise.all(schools.map(async school => {
     const classIds = school.classes.map(c => c.id)
 
+    const attSince = new Date(); attSince.setDate(attSince.getDate() - 30); attSince.setHours(0,0,0,0)
+
     const [totalAlunos, gradeRows, saebRows, pedCounts, pedRecent] = await Promise.all([
       prisma.student.count({ where: { classId: { in: classIds } } }),
       prisma.gradeRecord.findMany({
@@ -87,6 +89,30 @@ async function buildSchoolContext() {
       else if (p.level === 'BASICO') saebMap[p.descriptor.code].bas++
       else saebMap[p.descriptor.code].baixo++
     }
+
+    // Attendance stats (last 30 days)
+    const attStudentIds = await prisma.student.findMany({
+      where: { classId: { in: classIds }, status: 'ATIVO' },
+      select: { id: true },
+    }).then(rows => rows.map(r => r.id))
+
+    const attRecords: { studentId: string; status: string }[] = []
+    for (let i = 0; i < attStudentIds.length; i += 500) {
+      const batch = await prisma.studentAttendance.findMany({
+        where: { studentId: { in: attStudentIds.slice(i, i + 500) }, date: { gte: attSince } },
+        select: { studentId: true, status: true },
+      })
+      attRecords.push(...batch)
+    }
+
+    const attFaltaMap = new Map<string, number>()
+    const attJustMap = new Map<string, number>()
+    for (const r of attRecords) {
+      if (r.status === 'FALTA') attFaltaMap.set(r.studentId, (attFaltaMap.get(r.studentId) ?? 0) + 1)
+      else if (r.status === 'FALTA_JUSTIFICADA') attJustMap.set(r.studentId, (attJustMap.get(r.studentId) ?? 0) + 1)
+    }
+    const totalFaltas30 = Array.from(attFaltaMap.values()).reduce((a, b) => a + b, 0)
+    const alunosEmRiscoFreq = Array.from(attFaltaMap.entries()).filter(([, v]) => v >= 5).length
 
     const [teachersAll, teachersWithRecords] = await Promise.all([
       prisma.teacherClass.findMany({
@@ -150,6 +176,13 @@ async function buildSchoolContext() {
           data: p.date.toLocaleDateString('pt-BR'),
           plano: p.actionPlan?.slice(0, 80),
         })),
+      },
+      frequencia30dias: {
+        totalFaltasRegistradas: totalFaltas30,
+        alunosComMais5Faltas: alunosEmRiscoFreq,
+        observacao: alunosEmRiscoFreq === 0
+          ? 'Nenhum aluno com frequência crítica nos últimos 30 dias registrados.'
+          : `${alunosEmRiscoFreq} aluno(s) com 5+ faltas — risco de reprovação por frequência (mínimo legal: 75%).`,
       },
     }
   }))
@@ -216,6 +249,9 @@ INSTRUÇÕES:
   - professoresComRegistro = lista definitiva dos que já entregaram ao menos um
   - Use SEMPRE esses campos ao responder perguntas sobre diários/registros — NUNCA infira a partir de registrosAulaRecentes
 - registrosAulaRecentes contém apenas os últimos 15 registros — use apenas para conteúdo/pendências, NUNCA para inferir cobertura
+- frequencia30dias contém dados REAIS de chamada dos últimos 30 dias: totalFaltasRegistradas, alunosComMais5Faltas e observacao
+  - Professores registram a chamada em /professor/chamada; coordenação e pedagogia veem frequência em /frequencia
+  - Se frequencia30dias.totalFaltasRegistradas = 0, significa que a chamada ainda não foi lançada para esse período — informe isso claramente
 - Se um dado específico não estiver no contexto, diga isso em uma linha — NUNCA fabrique ou infira dados
 - Nunca invente dados. Se um campo for null ou ausente, diga explicitamente.`
 

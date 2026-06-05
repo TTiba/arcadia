@@ -55,6 +55,7 @@ export const DATA_KEY_DESCRIPTIONS: Record<string, string> = {
   atividade_professores: 'Total de registros de aula por professor',
   comparativo_turmas: 'Comparativo de desempenho entre turmas (médias de notas e SAEB)',
   total_alunos: 'Total de alunos matriculados. Params opcionais: classId',
+  frequencia_turma: 'Frequência escolar da turma: taxa de presença e alunos em risco. Params opcionais: classId, days (padrão 30)',
 }
 
 type Params = Record<string, string | number>
@@ -430,6 +431,63 @@ async function getTotalAlunos(params: Params, ctx: UserContext): Promise<WidgetD
   return { type: 'METRIC', data: { value: count, unit: 'alunos', detail: 'matriculados' } }
 }
 
+async function getFrequenciaTurma(params: Params, ctx: UserContext): Promise<WidgetData> {
+  const days = parseInt(String(params.days ?? 30))
+  const since = new Date()
+  since.setDate(since.getDate() - days)
+  since.setHours(0, 0, 0, 0)
+
+  const where = applyClassScope({}, ctx, params.classId)
+  const students = await prisma.student.findMany({
+    where: { ...where, status: 'ATIVO' },
+    select: { id: true, name: true, classId: true },
+  })
+
+  const studentIds = students.map(s => s.id)
+  if (studentIds.length === 0) {
+    return { type: 'METRIC', data: { value: '—', detail: 'Nenhum aluno ativo' } }
+  }
+
+  // Batch to avoid param limit
+  const records: { studentId: string; status: string }[] = []
+  for (let i = 0; i < studentIds.length; i += 500) {
+    const batch = await prisma.studentAttendance.findMany({
+      where: { studentId: { in: studentIds.slice(i, i + 500) }, date: { gte: since } },
+      select: { studentId: true, status: true },
+    })
+    records.push(...batch)
+  }
+
+  const schoolDays = new Set(
+    await prisma.studentAttendance.findMany({
+      where: { studentId: { in: studentIds.slice(0, 1) }, date: { gte: since } },
+      select: { date: true },
+    }).then(rows => rows.map(r => r.date.toISOString().slice(0, 10)))
+  ).size || 1
+
+  const faltaMap = new Map<string, number>()
+  for (const r of records) {
+    if (r.status === 'FALTA') faltaMap.set(r.studentId, (faltaMap.get(r.studentId) ?? 0) + 1)
+  }
+
+  const atRisk = students.filter(s => (faltaMap.get(s.id) ?? 0) >= 5)
+  const totalFaltas = Array.from(faltaMap.values()).reduce((a, b) => a + b, 0)
+  const avgFrequencia = students.length > 0
+    ? Math.round(((schoolDays * students.length - totalFaltas) / (schoolDays * students.length)) * 100)
+    : 100
+
+  return {
+    type: 'ALERT_LIST',
+    data: atRisk.length > 0
+      ? atRisk.slice(0, 10).map(s => ({
+          label: s.name,
+          detail: `${faltaMap.get(s.id) ?? 0} faltas nos últimos ${days} dias`,
+          type: (faltaMap.get(s.id) ?? 0) >= 8 ? 'danger' : 'warning',
+        }))
+      : [{ label: `Frequência média: ${avgFrequencia}%`, detail: `Todos os alunos com frequência adequada nos últimos ${days} dias`, type: 'info' }],
+  }
+}
+
 // ─── Engine ───────────────────────────────────────────────────────────────────
 
 type QueryFn = (params: Params, ctx: UserContext) => Promise<WidgetData>
@@ -450,6 +508,7 @@ const ENGINE: Record<string, QueryFn> = {
   atividade_professores: getAtividadeProfessores,
   comparativo_turmas: getComparativoTurmas,
   total_alunos: getTotalAlunos,
+  frequencia_turma: getFrequenciaTurma,
 }
 
 export async function executeWidget(
