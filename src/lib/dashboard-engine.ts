@@ -52,7 +52,7 @@ export const DATA_KEY_DESCRIPTIONS: Record<string, string> = {
   tarefas_pendentes: 'Alunos com mais tarefas não entregues. Params opcionais: classId',
   registros_pedagogicos: 'Resumo de registros pedagógicos por tipo. Params opcionais: classId',
   alunos_risco: 'Alunos em risco: SAEB baixo + tarefas pendentes + registros pedagógicos. Params opcionais: classId',
-  atividade_professores: 'Número de registros de aula por professor nos últimos 30 dias',
+  atividade_professores: 'Total de registros de aula por professor',
   comparativo_turmas: 'Comparativo de desempenho entre turmas (médias de notas e SAEB)',
   total_alunos: 'Total de alunos matriculados. Params opcionais: classId',
 }
@@ -328,16 +328,15 @@ async function getAlunosRisco(params: Params, ctx: UserContext): Promise<WidgetD
   const studentWhere = applyClassScope({}, ctx, params.classId)
   const homeworkWhere = applyClassScope({}, ctx, params.classId)
 
+  // Note: no negation filter inside include — negation + large result sets hit SQLite param limits.
+  // Filter confidentiality in JS instead.
   const [students, homework] = await Promise.all([
     prisma.student.findMany({
       where: studentWhere,
       include: {
         saebPerformances: { select: { level: true } },
         homeworkSubmissions: { select: { homeworkId: true } },
-        pedagogicalRecords: {
-          where: { confidentiality: { not: 'CONFIDENCIAL' } },
-          select: { id: true },
-        },
+        pedagogicalRecords: { select: { id: true, confidentiality: true } },
       },
     }),
     prisma.homework.findMany({ where: homeworkWhere, select: { id: true } }),
@@ -348,7 +347,7 @@ async function getAlunosRisco(params: Params, ctx: UserContext): Promise<WidgetD
     const abaixo = s.saebPerformances.filter(p => p.level === 'ABAIXO_BASICO').length
     const submitted = new Set(s.homeworkSubmissions.map(hs => hs.homeworkId))
     const pendingHw = homework.filter(hw => !submitted.has(hw.id)).length
-    const alerts = s.pedagogicalRecords.length
+    const alerts = s.pedagogicalRecords.filter(r => r.confidentiality !== 'CONFIDENCIAL').length
 
     const riskScore = abaixo * 2 + pendingHw + alerts * 1.5
     if (riskScore >= 3) {
@@ -365,11 +364,8 @@ async function getAlunosRisco(params: Params, ctx: UserContext): Promise<WidgetD
 }
 
 async function getAtividadeProfessores(params: Params, ctx: UserContext): Promise<WidgetData> {
-  const since = new Date()
-  since.setDate(since.getDate() - 30)
-
   // Teachers only see their own activity
-  const where: Record<string, unknown> = { date: { gte: since } }
+  const where: Record<string, unknown> = {}
   if (ctx.role === 'PROFESSOR') {
     const teacher = await prisma.teacher.findUnique({ where: { userId: ctx.userId } })
     if (teacher) where.teacherId = teacher.id
@@ -416,10 +412,10 @@ async function getComparativoTurmas(params: Params, ctx: UserContext): Promise<W
 
   const rows = classes.map(c => {
     const allGrades = c.students.flatMap(s => s.gradeRecords.map(g => g.score ?? 0)).filter(s => s > 0)
-    const avgGrade = allGrades.length ? allGrades.reduce((a, b) => a + b, 0) / allGrades.length : 0
+    const avgGrade = allGrades.length ? (allGrades.reduce((a, b) => a + b, 0) / allGrades.length).toFixed(1) : '-'
     const allSaeb = c.students.flatMap(s => s.saebPerformances.map(p => p.score))
-    const avgSaeb = allSaeb.length ? allSaeb.reduce((a, b) => a + b, 0) / allSaeb.length : 0
-    return [c.name, c.shift || '-', c.students.length, avgGrade.toFixed(1), avgSaeb.toFixed(1)]
+    const avgSaeb = allSaeb.length ? (allSaeb.reduce((a, b) => a + b, 0) / allSaeb.length).toFixed(1) : '-'
+    return [c.name, c.shift || '-', c.students.length, avgGrade, avgSaeb]
   })
 
   return {

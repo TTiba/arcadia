@@ -350,36 +350,42 @@ async function main() {
   const cls = (school: typeof A, code: string, letter: string) =>
     school.allClasses.find(c => c.code === code && c.letter === letter)!
 
-  // ─── Assessments for School A 9th grade ──────────────────────────────────────
-  console.log('  Creating assessments and grade records...')
-  const assessA9Port = await prisma.assessment.create({ data: { name: 'Avaliação LP — 1º Bimestre (9A)', subjectId: subPort.id, classId: cls(A,'9','A').id, period: '1º Bimestre', weight: 2.0, type: 'PROVA', date: new Date(2024, 2, 28), maxScore: 10 } })
-  const assessA9Mat  = await prisma.assessment.create({ data: { name: 'Avaliação MT — 1º Bimestre (9A)', subjectId: subMat.id,  classId: cls(A,'9','A').id, period: '1º Bimestre', weight: 2.0, type: 'PROVA', date: new Date(2024, 2, 28), maxScore: 10 } })
-  const assessA9Hist = await prisma.assessment.create({ data: { name: 'Avaliação HI — 2º Bimestre (9A)', subjectId: subHist.id, classId: cls(A,'9','A').id, period: '2º Bimestre', weight: 2.0, type: 'PROVA', date: new Date(2024, 4, 15), maxScore: 10 } })
+  // ─── Assessments and grade records for ALL classes (Port + Mat + Hist for FundII) ──
+  console.log('  Creating assessments and grade records for all classes...')
 
-  // Assessments for School B 9th grade
-  const assessB9Port = await prisma.assessment.create({ data: { name: 'Avaliação LP — 1º Bimestre (9A)', subjectId: subPort.id, classId: cls(B,'9','A').id, period: '1º Bimestre', weight: 2.0, type: 'PROVA', date: new Date(2024, 2, 28), maxScore: 10 } })
-  const assessB9Mat  = await prisma.assessment.create({ data: { name: 'Avaliação MT — 1º Bimestre (9A)', subjectId: subMat.id,  classId: cls(B,'9','A').id, period: '1º Bimestre', weight: 2.0, type: 'PROVA', date: new Date(2024, 2, 28), maxScore: 10 } })
+  for (const [school, lowPct, medPct, schoolLabel, spc] of [
+    [A, 0.05, 0.35, 'A', 35],
+    [B, 0.15, 0.45, 'B', 36],
+  ] as const) {
+    for (let ci = 0; ci < (school as typeof A).allClasses.length; ci++) {
+      const c = (school as typeof A).allClasses[ci]
+      const clsLabel = `${c.code}º ${c.letter} (${schoolLabel})`
+      const studs = await prisma.student.findMany({ where: { classId: c.id }, orderBy: { enrollment: 'asc' }, select: { id: true } })
 
-  const studA9A = await prisma.student.findMany({ where: { classId: cls(A,'9','A').id }, orderBy: { enrollment: 'asc' }, select: { id: true } })
-  const studB9A = await prisma.student.findMany({ where: { classId: cls(B,'9','A').id }, orderBy: { enrollment: 'asc' }, select: { id: true } })
+      const [aPort, aMat] = await Promise.all([
+        prisma.assessment.create({ data: { name: `LP — 1º Bim ${clsLabel}`, subjectId: subPort.id, classId: c.id, period: '1º Bimestre', weight: 2.0, type: 'PROVA', date: new Date(2024, 2, 28), maxScore: 10 } }),
+        prisma.assessment.create({ data: { name: `MT — 1º Bim ${clsLabel}`, subjectId: subMat.id,  classId: c.id, period: '1º Bimestre', weight: 2.0, type: 'PROVA', date: new Date(2024, 2, 28), maxScore: 10 } }),
+      ])
+      let aHist: { id: string } | null = null
+      if (c.fundII) {
+        aHist = await prisma.assessment.create({ data: { name: `HI — 2º Bim ${clsLabel}`, subjectId: subHist.id, classId: c.id, period: '2º Bimestre', weight: 2.0, type: 'PROVA', date: new Date(2024, 4, 15), maxScore: 10 } })
+      }
 
-  const grA = studA9A.flatMap((s, i) => {
-    const t = getTier(i, 0.05, 0.35)
-    return [
-      { assessmentId: assessA9Port.id, studentId: s.id, teacherId: A.tchPort.id, userId: A.tPortU.id, score: scoreForTier(t, i),       observations: t === 'L' ? 'Necessita reforço urgente' : null },
-      { assessmentId: assessA9Mat.id,  studentId: s.id, teacherId: A.tchMat.id,  userId: A.tMatU.id,  score: scoreForTier(t, i + 100),  observations: t === 'L' ? 'Dificuldades com álgebra' : null  },
-      { assessmentId: assessA9Hist.id, studentId: s.id, teacherId: A.tchHist.id, userId: A.tHistU.id, score: scoreForTier(t, i + 200),  observations: t === 'L' ? 'Abaixo da média da turma' : null   },
-    ]
-  })
-  const grB = studB9A.flatMap((s, i) => {
-    const t = getTier(i, 0.15, 0.45)
-    return [
-      { assessmentId: assessB9Port.id, studentId: s.id, teacherId: B.tchPort.id, userId: B.tPortU.id, score: scoreForTier(t, i + 300), observations: t === 'L' ? 'Intervenção pedagógica necessária' : null },
-      { assessmentId: assessB9Mat.id,  studentId: s.id, teacherId: B.tchMat.id,  userId: B.tMatU.id,  score: scoreForTier(t, i + 400), observations: t === 'L' ? 'Defasagem severa em pré-requisitos' : null },
-    ]
-  })
-  for (let i = 0; i < grA.length; i += 50) await prisma.gradeRecord.createMany({ data: grA.slice(i, i + 50) })
-  for (let i = 0; i < grB.length; i += 50) await prisma.gradeRecord.createMany({ data: grB.slice(i, i + 50) })
+      const idxBase = ci * (spc as number)
+      const recs: any[] = studs.flatMap((s, i) => {
+        const t = getTier(idxBase + i, lowPct as number, medPct as number)
+        const obs9 = c.code === '9' && t === 'L' ? 'Necessita intervenção pedagógica' : null
+        const base: any[] = [
+          { assessmentId: aPort.id, studentId: s.id, teacherId: (school as typeof A).tchPort.id, userId: (school as typeof A).tPortU.id, score: scoreForTier(t, idxBase + i),      observations: obs9 },
+          { assessmentId: aMat.id,  studentId: s.id, teacherId: (school as typeof A).tchMat.id,  userId: (school as typeof A).tMatU.id,  score: scoreForTier(t, idxBase + i + 50), observations: obs9 },
+        ]
+        if (aHist) base.push({ assessmentId: aHist.id, studentId: s.id, teacherId: (school as typeof A).tchHist.id, userId: (school as typeof A).tHistU.id, score: scoreForTier(t, idxBase + i + 100), observations: obs9 })
+        return base
+      })
+
+      for (let j = 0; j < recs.length; j += 100) await prisma.gradeRecord.createMany({ data: recs.slice(j, j + 100) })
+    }
+  }
 
   // ─── Interdisciplinary lesson: Crise Hídrica (School A, 9A) ──────────────────
   console.log('  Creating interdisciplinary lesson...')

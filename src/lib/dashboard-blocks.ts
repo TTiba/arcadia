@@ -118,7 +118,7 @@ export const BLOCK_LIBRARY: Record<string, Block> = {
 
   teacher_activity: {
     name: 'Atividade dos Professores',
-    description: 'Registros de aula por professor nos últimos 30 dias',
+    description: 'Total de registros de aula por professor',
     widgets: [
       { type: 'LIST', title: 'Registros de Aula por Professor', dataKey: 'atividade_professores', size: 'md' },
     ],
