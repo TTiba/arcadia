@@ -191,36 +191,22 @@ export default async function DashboardPage() {
             </CardHeader>
             <CardContent className="px-6 pb-4">
               <div className="grid grid-cols-2 gap-3">
-                <QuickLink
-                  href="/admin/turmas"
-                  label="Gerenciar Turmas"
-                  icon={<School className="h-5 w-5 text-primary" />}
-                />
-                <QuickLink
-                  href="/admin/alunos"
-                  label="Ver Alunos"
-                  icon={<UserCheck className="h-5 w-5 text-primary" />}
-                />
-                <QuickLink
-                  href="/admin/professores"
-                  label="Professores"
-                  icon={<Users className="h-5 w-5 text-primary" />}
-                />
-                <QuickLink
-                  href="/pedagogo/registros"
-                  label="Registros Pedag."
-                  icon={<FileText className="h-5 w-5 text-primary" />}
-                />
-                <QuickLink
-                  href="/ai/assistente"
-                  label="Assistente IA"
-                  icon={<Sparkles className="h-5 w-5 text-primary" />}
-                />
-                <QuickLink
-                  href="/admin/avaliacoes"
-                  label="Avaliações"
-                  icon={<Star className="h-5 w-5 text-primary" />}
-                />
+                {['ADMIN', 'COORDENACAO'].includes(role) && <>
+                  <QuickLink href="/admin/turmas" label="Gerenciar Turmas" icon={<School className="h-5 w-5 text-primary" />} />
+                  <QuickLink href="/admin/alunos" label="Ver Alunos" icon={<UserCheck className="h-5 w-5 text-primary" />} />
+                  <QuickLink href="/admin/professores" label="Professores" icon={<Users className="h-5 w-5 text-primary" />} />
+                  <QuickLink href="/admin/avaliacoes" label="Avaliações" icon={<Star className="h-5 w-5 text-primary" />} />
+                </>}
+                {['PEDAGOGO', 'COORDENACAO'].includes(role) &&
+                  <QuickLink href="/pedagogo/registros" label="Registros Pedag." icon={<FileText className="h-5 w-5 text-primary" />} />
+                }
+                {['PROFESSOR'].includes(role) && <>
+                  <QuickLink href="/professor/portal" label="Portal do Professor" icon={<BookOpen className="h-5 w-5 text-primary" />} />
+                  <QuickLink href="/professor/registro-aula" label="Registro de Aula" icon={<ClipboardList className="h-5 w-5 text-primary" />} />
+                  <QuickLink href="/professor/notas" label="Lançar Notas" icon={<Star className="h-5 w-5 text-primary" />} />
+                </>}
+                <QuickLink href="/mensagens" label="Mensagens" icon={<FileText className="h-5 w-5 text-primary" />} />
+                <QuickLink href="/ai/assistente" label="Assistente IA" icon={<Sparkles className="h-5 w-5 text-primary" />} />
               </div>
             </CardContent>
           </Card>
