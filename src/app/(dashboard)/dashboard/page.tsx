@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   Users, BookOpen, School, ClipboardList,
   Star, CheckSquare, AlertTriangle, TrendingUp,
-  Link as LinkIcon, UserCheck, FileText, Sparkles,
+  Link as LinkIcon, UserCheck, FileText, Sparkles, ArrowRight,
 } from 'lucide-react'
 import { ROLE_LABELS } from '@/lib/utils'
 import Link from 'next/link'
@@ -84,24 +84,28 @@ export default async function DashboardPage() {
             value={metrics.totalStudents}
             icon={<Users className="h-5 w-5 text-primary" />}
             note="Total matriculados"
+            href={['ADMIN','COORDENACAO','PEDAGOGO'].includes(role) ? '/admin/alunos' : undefined}
           />
           <MetricCard
             title="Turmas Ativas"
             value={metrics.totalClasses}
             icon={<School className="h-5 w-5 text-primary" />}
             note="Em andamento"
+            href={['ADMIN','COORDENACAO'].includes(role) ? '/admin/turmas' : undefined}
           />
           <MetricCard
             title="Aulas Cadastradas"
             value={metrics.totalLessons}
             icon={<BookOpen className="h-5 w-5 text-primary" />}
             note="No sistema"
+            href={['ADMIN','COORDENACAO'].includes(role) ? '/admin/aulas' : '/professor/portal'}
           />
           <MetricCard
             title="Professores"
             value={metrics.totalTeachers}
             icon={<Star className="h-5 w-5 text-primary" />}
             note="Cadastrados"
+            href={['ADMIN','COORDENACAO'].includes(role) ? '/admin/professores' : undefined}
           />
         </div>
 
@@ -112,24 +116,24 @@ export default async function DashboardPage() {
             value={metrics.studentsWithoutHomework}
             description="Alunos sem nenhuma entrega registrada"
             icon={<CheckSquare className="h-4 w-4 text-warning" />}
-            accentClass="border-l-[hsl(44_100%_41%)]"
             accentStyle={{ borderLeftColor: 'hsl(44 100% 41%)' }}
+            href={['ADMIN','COORDENACAO','PEDAGOGO'].includes(role) ? '/admin/alunos' : undefined}
           />
           <AlertCard
             title="Profs. sem Registro"
             value={metrics.teachersWithoutRecord}
             description="Professores sem registro de aula"
             icon={<ClipboardList className="h-4 w-4 text-destructive" />}
-            accentClass=""
             accentStyle={{ borderLeftColor: 'hsl(0 84% 60%)' }}
+            href={['ADMIN','COORDENACAO'].includes(role) ? '/admin/professores' : undefined}
           />
           <AlertCard
             title="Alertas Pedagógicos"
             value={metrics.pedagogicalAlerts}
             description="Registros pedagógicos abertos"
             icon={<AlertTriangle className="h-4 w-4 text-warning" />}
-            accentClass=""
             accentStyle={{ borderLeftColor: 'hsl(44 100% 41%)' }}
+            href={['ADMIN','COORDENACAO','PEDAGOGO'].includes(role) ? '/pedagogo/registros' : undefined}
           />
         </div>
 
@@ -217,70 +221,63 @@ export default async function DashboardPage() {
 }
 
 function MetricCard({
-  title,
-  value,
-  icon,
-  note,
+  title, value, icon, note, href,
 }: {
   title: string
   value: number
   icon: React.ReactNode
   note?: string
+  href?: string
 }) {
-  return (
-    <Card className="rounded-2xl border border-border shadow-none">
+  const inner = (
+    <Card className={`rounded-2xl border border-border shadow-none transition-colors ${href ? 'hover:border-ring hover:bg-accent/40 cursor-pointer' : ''}`}>
       <CardContent className="p-6">
         <div className="flex items-start justify-between">
           <div>
             <p className="text-sm text-muted-foreground font-medium">{title}</p>
             <p className="text-4xl font-bold tracking-tight font-serif mt-1">{value}</p>
-            {note && (
-              <p className="text-xs text-muted-foreground mt-1">{note}</p>
-            )}
+            {note && <p className="text-xs text-muted-foreground mt-1">{note}</p>}
           </div>
-          <div className="p-2.5 rounded-xl bg-muted/60 shrink-0">
-            {icon}
+          <div className="flex flex-col items-end gap-2">
+            <div className="p-2.5 rounded-xl bg-muted/60 shrink-0">{icon}</div>
+            {href && <ArrowRight className="h-3.5 w-3.5 text-muted-foreground/50" />}
           </div>
         </div>
       </CardContent>
     </Card>
   )
+  return href ? <Link href={href}>{inner}</Link> : inner
 }
 
 function AlertCard({
-  title,
-  value,
-  description,
-  icon,
-  accentClass,
-  accentStyle,
+  title, value, description, icon, accentStyle, href,
 }: {
   title: string
   value: number
   description: string
   icon: React.ReactNode
-  accentClass: string
   accentStyle?: React.CSSProperties
+  href?: string
 }) {
-  return (
+  const inner = (
     <Card
-      className={`rounded-2xl border border-border shadow-none border-l-4 ${accentClass}`}
+      className={`rounded-2xl border border-border shadow-none border-l-4 transition-colors ${href ? 'hover:border-ring hover:bg-accent/40 cursor-pointer' : ''}`}
       style={accentStyle}
     >
       <CardContent className="p-5">
         <div className="flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-muted/60 shrink-0">
-            {icon}
-          </div>
-          <div>
+          <div className="p-2 rounded-lg bg-muted/60 shrink-0">{icon}</div>
+          <div className="flex-1 min-w-0">
             <p className="text-sm font-medium">{title}</p>
             <p className="text-2xl font-bold font-serif leading-tight">{value}</p>
             <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
           </div>
+          {href && <ArrowRight className="h-4 w-4 text-muted-foreground/50 shrink-0" />}
         </div>
       </CardContent>
     </Card>
   )
+  return href ? <Link href={href}>{inner}</Link> : inner
 }
 
 function QuickLink({
