@@ -14,6 +14,7 @@ export async function GET() {
       user: true,
       teacherSubjects: { include: { subject: true } },
       teacherClasses: { include: { class: true, subject: true } },
+      _count: { select: { classRecords: true } },
     },
     orderBy: { user: { name: 'asc' } },
   })

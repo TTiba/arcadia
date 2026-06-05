@@ -117,7 +117,7 @@ export default async function DashboardPage() {
             description="Alunos sem nenhuma entrega registrada"
             icon={<CheckSquare className="h-4 w-4 text-warning" />}
             accentStyle={{ borderLeftColor: 'hsl(44 100% 41%)' }}
-            href={['ADMIN','COORDENACAO','PEDAGOGO'].includes(role) ? '/admin/alunos' : undefined}
+            href={['ADMIN','COORDENACAO','PEDAGOGO'].includes(role) ? '/admin/alunos?filter=sem-tarefas' : undefined}
           />
           <AlertCard
             title="Profs. sem Registro"
@@ -125,7 +125,7 @@ export default async function DashboardPage() {
             description="Professores sem registro de aula"
             icon={<ClipboardList className="h-4 w-4 text-destructive" />}
             accentStyle={{ borderLeftColor: 'hsl(0 84% 60%)' }}
-            href={['ADMIN','COORDENACAO'].includes(role) ? '/admin/professores' : undefined}
+            href={['ADMIN','COORDENACAO'].includes(role) ? '/admin/professores?filter=sem-registro' : undefined}
           />
           <AlertCard
             title="Alertas Pedagógicos"
@@ -133,7 +133,7 @@ export default async function DashboardPage() {
             description="Registros pedagógicos abertos"
             icon={<AlertTriangle className="h-4 w-4 text-warning" />}
             accentStyle={{ borderLeftColor: 'hsl(44 100% 41%)' }}
-            href={['ADMIN','COORDENACAO','PEDAGOGO'].includes(role) ? '/pedagogo/registros' : undefined}
+            href={['ADMIN','COORDENACAO','PEDAGOGO'].includes(role) ? '/pedagogo/registros?filter=abertos' : undefined}
           />
         </div>
 

@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -7,7 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Textarea } from '@/components/ui/textarea'
-import { Plus, Search, Heart, User, Calendar, Lock } from 'lucide-react'
+import { Plus, Search, Heart, User, Calendar, Lock, X } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { PEDAGOGICAL_RECORD_TYPE_LABELS, formatDate } from '@/lib/utils'
 
@@ -53,6 +54,8 @@ export default function RegistrosPedagogicosPage() {
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState('')
   const [open, setOpen] = useState(false)
+  const searchParams = useSearchParams()
+  const activeFilter = searchParams.get('filter')
   const [form, setForm] = useState({
     studentId: '', type: 'OBSERVACAO', title: '', content: '',
     date: new Date().toISOString().split('T')[0], confidentiality: 'RESTRITO', actionPlan: ''
@@ -90,7 +93,8 @@ export default function RegistrosPedagogicosPage() {
       r.student.name.toLowerCase().includes(search.toLowerCase()) ||
       r.title.toLowerCase().includes(search.toLowerCase())
     const matchType = !typeFilter || r.type === typeFilter
-    return matchSearch && matchType
+    const matchFilter = activeFilter === 'abertos' ? !r.resolved : true
+    return matchSearch && matchType && matchFilter
   })
 
   // Group by student for summary
@@ -111,6 +115,12 @@ export default function RegistrosPedagogicosPage() {
         <Button onClick={() => setOpen(true)}><Plus className="h-4 w-4 mr-2" /> Novo Registro</Button>
       </div>
 
+      {activeFilter === 'abertos' && (
+        <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800 w-fit">
+          <span>Filtro ativo: <strong>alertas não resolvidos</strong></span>
+          <a href="/pedagogo/registros" className="ml-1 text-amber-600 hover:text-amber-900"><X className="h-3.5 w-3.5" /></a>
+        </div>
+      )}
       <div className="flex gap-3">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />

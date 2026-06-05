@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -9,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
-import { Plus, Search, UserCheck, Pencil, Eye } from 'lucide-react'
+import { Plus, Search, UserCheck, Eye, X } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { STATUS_LABELS, formatDate } from '@/lib/utils'
 
@@ -46,6 +47,8 @@ export default function AlunosPage() {
   const [selected, setSelected] = useState<Student | null>(null)
   const [form, setForm] = useState(defaultForm)
   const { toast } = useToast()
+  const searchParams = useSearchParams()
+  const activeFilter = searchParams.get('filter')
 
   useEffect(() => { fetchStudents() }, [])
 
@@ -80,10 +83,11 @@ export default function AlunosPage() {
     setViewOpen(true)
   }
 
-  const filtered = students.filter(s =>
-    s.name.toLowerCase().includes(search.toLowerCase()) ||
-    s.enrollment.includes(search)
-  )
+  const filtered = students.filter(s => {
+    const matchSearch = s.name.toLowerCase().includes(search.toLowerCase()) || s.enrollment.includes(search)
+    const matchFilter = activeFilter === 'sem-tarefas' ? (s._count?.homeworkSubmissions ?? 0) === 0 : true
+    return matchSearch && matchFilter
+  })
 
   return (
     <div className="p-6 space-y-6">
@@ -97,6 +101,12 @@ export default function AlunosPage() {
         </Button>
       </div>
 
+      {activeFilter === 'sem-tarefas' && (
+        <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800 w-fit">
+          <span>Filtro ativo: <strong>sem nenhuma entrega de tarefa</strong></span>
+          <a href="/admin/alunos" className="ml-1 text-amber-600 hover:text-amber-900"><X className="h-3.5 w-3.5" /></a>
+        </div>
+      )}
       <div className="relative max-w-sm">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input placeholder="Buscar por nome ou matrícula..." className="pl-9" value={search} onChange={e => setSearch(e.target.value)} />

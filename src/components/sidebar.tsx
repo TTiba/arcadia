@@ -97,45 +97,40 @@ export function Sidebar() {
     >
       {/* Logo area */}
       <div className="flex items-center justify-between px-3 py-4 border-b border-sidebar-border">
-        {!collapsed && (
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className="bg-teal rounded-lg p-1.5 shrink-0">
-              <GraduationCap className="h-4 w-4 text-white" />
+        {!collapsed ? (
+          <>
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="bg-teal rounded-lg p-1.5 shrink-0">
+                <GraduationCap className="h-4 w-4 text-white" />
+              </div>
+              <span
+                className="font-serif text-lg font-semibold tracking-wide"
+                style={{ color: 'hsl(45 20% 92%)' }}
+              >
+                Vela
+              </span>
             </div>
-            <span
-              className="font-serif text-lg font-semibold tracking-wide"
-              style={{ color: 'hsl(45 20% 92%)' }}
+            <button
+              onClick={() => setCollapsed(true)}
+              className="flex items-center justify-center h-6 w-6 rounded-md transition-colors shrink-0 text-sidebar-text hover:text-white hover:bg-sidebar-hover"
+              aria-label="Recolher menu"
             >
-              Vela
-            </span>
-          </div>
-        )}
-        {collapsed && (
-          <div className="mx-auto">
+              <ChevronLeft className="h-3.5 w-3.5" />
+            </button>
+          </>
+        ) : (
+          <div className="flex flex-col items-center gap-2 w-full">
             <div className="bg-teal rounded-lg p-1.5">
               <GraduationCap className="h-4 w-4 text-white" />
             </div>
+            <button
+              onClick={() => setCollapsed(false)}
+              className="flex items-center justify-center h-6 w-6 rounded-md transition-colors text-sidebar-text hover:text-white hover:bg-sidebar-hover"
+              aria-label="Expandir menu"
+            >
+              <ChevronRight className="h-3.5 w-3.5" />
+            </button>
           </div>
-        )}
-        <button
-          onClick={() => setCollapsed(!collapsed)}
-          className={cn(
-            'flex items-center justify-center h-6 w-6 rounded-md transition-colors shrink-0',
-            'text-sidebar-text hover:text-white hover:bg-sidebar-hover',
-            collapsed && 'hidden'
-          )}
-          aria-label={collapsed ? 'Expandir menu' : 'Recolher menu'}
-        >
-          <ChevronLeft className="h-3.5 w-3.5" />
-        </button>
-        {collapsed && (
-          <button
-            onClick={() => setCollapsed(false)}
-            className="absolute right-0 translate-x-full top-4 flex items-center justify-center h-6 w-5 rounded-r-md bg-sidebar-border text-sidebar-text hover:text-white transition-colors z-10"
-            aria-label="Expandir menu"
-          >
-            <ChevronRight className="h-3 w-3" />
-          </button>
         )}
       </div>
 

@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -7,7 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Plus, Search, Users, Pencil, BookOpen } from 'lucide-react'
+import { Plus, Search, Users, X } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 
 interface Teacher {
@@ -16,6 +17,7 @@ interface Teacher {
   user: { name: string; email: string; active: boolean }
   teacherSubjects: { subject: { id: string; name: string } }[]
   teacherClasses: { class: { id: string; name: string }; subject: { name: string } }[]
+  _count?: { classRecords: number }
 }
 
 export default function ProfessoresPage() {
@@ -24,6 +26,8 @@ export default function ProfessoresPage() {
   const [open, setOpen] = useState(false)
   const [form, setForm] = useState({ name: '', email: '', password: '', registration: '' })
   const { toast } = useToast()
+  const searchParams = useSearchParams()
+  const activeFilter = searchParams.get('filter')
 
   useEffect(() => { fetchTeachers() }, [])
 
@@ -49,10 +53,11 @@ export default function ProfessoresPage() {
     }
   }
 
-  const filtered = teachers.filter(t =>
-    t.user.name.toLowerCase().includes(search.toLowerCase()) ||
-    t.user.email.toLowerCase().includes(search.toLowerCase())
-  )
+  const filtered = teachers.filter(t => {
+    const matchSearch = t.user.name.toLowerCase().includes(search.toLowerCase()) || t.user.email.toLowerCase().includes(search.toLowerCase())
+    const matchFilter = activeFilter === 'sem-registro' ? (t._count?.classRecords ?? 0) === 0 : true
+    return matchSearch && matchFilter
+  })
 
   return (
     <div className="p-6 space-y-6">
@@ -66,6 +71,12 @@ export default function ProfessoresPage() {
         </Button>
       </div>
 
+      {activeFilter === 'sem-registro' && (
+        <div className="flex items-center gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-sm text-red-800 w-fit">
+          <span>Filtro ativo: <strong>sem nenhum registro de aula</strong></span>
+          <a href="/admin/professores" className="ml-1 text-red-500 hover:text-red-800"><X className="h-3.5 w-3.5" /></a>
+        </div>
+      )}
       <div className="relative max-w-sm">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input placeholder="Buscar professor..." className="pl-9" value={search} onChange={e => setSearch(e.target.value)} />
@@ -81,6 +92,7 @@ export default function ProfessoresPage() {
                 <TableHead>Matrícula</TableHead>
                 <TableHead>Componentes</TableHead>
                 <TableHead>Turmas</TableHead>
+                <TableHead>Registros de Aula</TableHead>
                 <TableHead>Status</TableHead>
               </TableRow>
             </TableHeader>
@@ -106,6 +118,12 @@ export default function ProfessoresPage() {
                         <Badge key={name} variant="info" className="text-xs">{name}</Badge>
                       ))}
                     </div>
+                  </TableCell>
+                  <TableCell>
+                    {(t._count?.classRecords ?? 0) === 0
+                      ? <Badge variant="destructive" className="text-xs">Nenhum</Badge>
+                      : <span className="text-sm font-medium">{t._count?.classRecords}</span>
+                    }
                   </TableCell>
                   <TableCell>
                     <Badge variant={t.user.active ? 'success' : 'secondary'}>
