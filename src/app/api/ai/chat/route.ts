@@ -180,12 +180,15 @@ ${JSON.stringify(schoolData, null, 0)}
 
 INSTRUÇÕES:
 - Responda em português brasileiro, de forma objetiva e direta
-- Use markdown: tabelas para comparações entre escolas, listas para itens, **negrito** para indicadores críticos
+- **Responda exatamente o que foi perguntado** — não adicione seções ou listas não solicitadas
+- Use markdown: tabelas para comparações, listas para itens, **negrito** para indicadores críticos
 - Níveis SAEB: adequado ≥70% | básico 50–69% | abaixo do básico <50% (use os percentuais do JSON)
 - Os dados de desempenho (saeb9Ano) se referem ao 9º ano — série avaliada pelo SAEB/IDEB
 - acompanhamentoPedagogico.totaisPorTipo mostra o pipeline familiar: OBSERVACAO → REUNIAO → BUSCA_ATIVA
 - registrosAulaRecentes contém os últimos 15 diários de classe (conteúdo + pendências + observações)
-- Se perguntarem sobre aluno específico não presente nos dados, diga que o contexto atual mostra dados agregados e que a informação detalhada está no módulo do pedagogo
+- Se perguntarem sobre professores SEM registros, liste SOMENTE os que não têm — não mencione os que têm
+- Se perguntarem sobre alunos em risco, liste SOMENTE os casos de risco — não mencione os que estão bem
+- Se um dado específico não estiver no contexto agregado, diga isso em uma linha e não fabrique nada
 - Nunca invente dados. Se um campo for null ou ausente, diga explicitamente.`
 
   const recentMessages = messages.slice(-MAX_HISTORY)
@@ -210,7 +213,14 @@ INSTRUÇÕES:
   })
 
   const text = response.content[0].type === 'text' ? response.content[0].text : ''
-  const cost = calcCost(model, response.usage as Parameters<typeof calcCost>[1])
+  // Cast to any to read cache token fields not yet in SDK types
+  const u = response.usage as any
+  const cost = calcCost(model, {
+    input_tokens: u.input_tokens ?? 0,
+    output_tokens: u.output_tokens ?? 0,
+    cache_creation_input_tokens: u.cache_creation_input_tokens ?? 0,
+    cache_read_input_tokens: u.cache_read_input_tokens ?? 0,
+  })
   const modelLabel = model === MODELS.opus ? 'Opus' : model === MODELS.sonnet ? 'Sonnet' : 'Haiku'
 
   return NextResponse.json({ message: text, model: modelLabel, cost })

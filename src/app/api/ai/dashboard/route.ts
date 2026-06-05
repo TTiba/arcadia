@@ -47,13 +47,16 @@ export async function POST(req: NextRequest) {
     messages: [{ role: 'user', content: prompt }],
   })
 
-  const text = response.content[0].type === 'text' ? response.content[0].text.trim() : ''
+  const raw = response.content[0].type === 'text' ? response.content[0].text.trim() : ''
+  // Strip markdown code blocks if model wrapped the JSON
+  const text = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim()
 
   let config: CompactDashboardConfig
   try {
     config = JSON.parse(text)
-    if (!config.blocks || !Array.isArray(config.blocks)) throw new Error('invalid')
+    if (!config.blocks || !Array.isArray(config.blocks) || config.blocks.length === 0) throw new Error('invalid')
   } catch {
+    console.error('[dashboard] parse failed. raw:', raw.slice(0, 200))
     return NextResponse.json(
       { error: 'Não foi possível gerar o dashboard. Tente reformular o pedido.' },
       { status: 422 }
