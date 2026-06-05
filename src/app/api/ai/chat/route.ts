@@ -88,19 +88,45 @@ async function buildSchoolContext() {
       else saebMap[p.descriptor.code].baixo++
     }
 
-    const teachers = await prisma.teacherClass.findMany({
-      where: { classId: { in: classIds } },
-      distinct: ['teacherId'],
-      select: { teacher: { select: { user: { select: { name: true } } } }, subject: { select: { name: true } } },
-      take: 10,
-    })
+    const [teachersAll, teachersWithRecords] = await Promise.all([
+      prisma.teacherClass.findMany({
+        where: { classId: { in: classIds } },
+        distinct: ['teacherId'],
+        select: {
+          teacher: { select: { id: true, user: { select: { name: true } }, classRecords: { select: { id: true } } } },
+          subject: { select: { name: true } },
+        },
+      }),
+      prisma.classRecord.groupBy({
+        by: ['teacherId'],
+        where: { classId: { in: classIds } },
+        _count: { id: true },
+      }),
+    ])
+
+    const recordCountByTeacher = Object.fromEntries(teachersWithRecords.map(r => [r.teacherId, r._count.id]))
+
+    const teacherCoverage = teachersAll.map(tc => ({
+      nome: tc.teacher.user.name,
+      disciplina: tc.subject.name,
+      totalRegistros: recordCountByTeacher[tc.teacher.id] ?? 0,
+    }))
+
+    const professoresSemRegistro = teacherCoverage.filter(t => t.totalRegistros === 0)
+    const professoresComRegistro = teacherCoverage.filter(t => t.totalRegistros > 0)
 
     return {
       escola: school.name,
       cidade: school.address?.split(',')[1]?.trim().split('-')[0]?.trim() ?? '',
       totalAlunos,
       totalTurmas: school.classes.length,
-      professores: teachers.map(t => `${t.teacher.user.name} (${t.subject.name})`),
+      coberturaDiarios: {
+        totalProfessores: teacherCoverage.length,
+        comRegistro: professoresComRegistro.length,
+        semRegistro: professoresSemRegistro.length,
+        professoresSemRegistro,
+        professoresComRegistro: professoresComRegistro.map(t => ({ nome: t.nome, disciplina: t.disciplina, totalRegistros: t.totalRegistros })),
+      },
       desempenho: {
         mediaGeral: avg(allScores),
         abaixoMedia: belowAvg,
@@ -185,10 +211,12 @@ INSTRUÇÕES:
 - Níveis SAEB: adequado ≥70% | básico 50–69% | abaixo do básico <50% (use os percentuais do JSON)
 - Os dados de desempenho (saeb9Ano) se referem ao 9º ano — série avaliada pelo SAEB/IDEB
 - acompanhamentoPedagogico.totaisPorTipo mostra o pipeline familiar: OBSERVACAO → REUNIAO → BUSCA_ATIVA
-- registrosAulaRecentes contém os últimos 15 diários de classe (conteúdo + pendências + observações)
-- Se perguntarem sobre professores SEM registros, liste SOMENTE os que não têm — não mencione os que têm
-- Se perguntarem sobre alunos em risco, liste SOMENTE os casos de risco — não mencione os que estão bem
-- Se um dado específico não estiver no contexto agregado, diga isso em uma linha e não fabrique nada
+- coberturaDiarios contém dados EXATOS e COMPLETOS de quem entregou ou não registros de aula:
+  - professoresSemRegistro = lista definitiva dos que NUNCA entregaram nenhum registro
+  - professoresComRegistro = lista definitiva dos que já entregaram ao menos um
+  - Use SEMPRE esses campos ao responder perguntas sobre diários/registros — NUNCA infira a partir de registrosAulaRecentes
+- registrosAulaRecentes contém apenas os últimos 15 registros — use apenas para conteúdo/pendências, NUNCA para inferir cobertura
+- Se um dado específico não estiver no contexto, diga isso em uma linha — NUNCA fabrique ou infira dados
 - Nunca invente dados. Se um campo for null ou ausente, diga explicitamente.`
 
   const recentMessages = messages.slice(-MAX_HISTORY)

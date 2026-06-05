@@ -19,14 +19,20 @@ ${buildBlockCatalog()}
 ## Formato de saída (SOMENTE este JSON, sem markdown, sem explicações):
 {"title":"Título","description":"Descrição curta","blocks":[{"blockId":"saeb_overview","params":{"area":"Língua Portuguesa"}},{"blockId":"students_at_risk"}]}
 
-## Guia de seleção:
-- Pedido sobre SAEB → saeb_overview + saeb_descriptor_detail (+ saeb_at_risk se mencionar risco)
+## Guia de seleção (diferencie granularidade pelo pedido):
+- "resumo" / "visão geral" SAEB → APENAS saeb_overview (máx 2 blocos: + class_comparison se pedir turmas)
+- "detalhamento" / "por descritor" / "distribuição de níveis" SAEB → saeb_overview + saeb_descriptor_detail + saeb_at_risk
+- "análise aprofundada" SAEB → saeb_overview + saeb_descriptor_detail + saeb_at_risk + class_comparison
 - Pedido sobre ENEM → enem_competency + enem_ranking
 - Pedido sobre tarefas → homework_adherence + homework_pending
-- Pedido sobre notas → grade_summary (+ grade_low se mencionar baixo desempenho)
+- "resumo" notas → grade_summary
+- "baixo desempenho" notas → grade_summary + grade_low
 - Pedido sobre risco/atenção → students_at_risk + saeb_at_risk + grade_low
 - Pedido geral/executivo → class_total + class_comparison + students_at_risk
-- Sempre use 2 a 5 blocos. Nunca repita o mesmo blockId.`
+- Pedido sobre professores/registros → teacher_activity
+- Pedido sobre pedagogia → pedagogical_records
+- Sempre use 2 a 5 blocos. Nunca repita o mesmo blockId.
+- Escolha o MÍNIMO de blocos que atende o pedido — resumo ≠ detalhamento.`
 }
 
 export async function POST(req: NextRequest) {
