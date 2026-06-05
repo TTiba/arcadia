@@ -44,6 +44,12 @@ function saebScore(t: 'L' | 'M' | 'H', seed: number): number {
   return Math.round(Math.min(s, 10) * 10) / 10
 }
 
+function enemScore(t: 'L' | 'M' | 'H', seed: number): number {
+  const v = Math.abs(Math.sin(seed * 6.17 + 6)) % 1
+  const s = t === 'H' ? 650 + v * 200 : t === 'M' ? 450 + v * 200 : 200 + v * 250
+  return Math.round(Math.min(s, 1000))
+}
+
 const saebLevel = (s: number) => s >= 7 ? 'ADEQUADO' : s >= 5 ? 'BASICO' : 'ABAIXO_BASICO'
 const hash = (p: string) => bcrypt.hashSync(p, 10)
 
@@ -119,6 +125,17 @@ async function main() {
     prisma.saebDescriptor.create({ data: { code: 'MT9-D28', description: 'Resolver problema envolvendo noções de probabilidade', area: 'Matemática', level: '9º Ano' } }),
   ])
   const saebDescs = [lp9D9, lp9D10, lp9D14, mt9D22, mt9D24, mt9D26, mt9D28]
+
+  // ─── SAEB Descriptors — 5th grade ────────────────────────────────────────────
+  const [lp5D1, lp5D3, lp5D7, lp5D14, mt5D14, mt5D21] = await Promise.all([
+    prisma.saebDescriptor.create({ data: { code: 'LP5-D1',  description: 'Localizar informações explícitas em um texto', area: 'Língua Portuguesa', level: '5º Ano' } }),
+    prisma.saebDescriptor.create({ data: { code: 'LP5-D3',  description: 'Inferir o sentido de uma palavra ou expressão', area: 'Língua Portuguesa', level: '5º Ano' } }),
+    prisma.saebDescriptor.create({ data: { code: 'LP5-D7',  description: 'Identificar o tema de um texto', area: 'Língua Portuguesa', level: '5º Ano' } }),
+    prisma.saebDescriptor.create({ data: { code: 'LP5-D14', description: 'Identificar efeitos de ironia ou humor em textos variados', area: 'Língua Portuguesa', level: '5º Ano' } }),
+    prisma.saebDescriptor.create({ data: { code: 'MT5-D14', description: 'Resolver problema utilizando transformação de unidades de medida', area: 'Matemática', level: '5º Ano' } }),
+    prisma.saebDescriptor.create({ data: { code: 'MT5-D21', description: 'Calcular a área de figuras planas desenhadas em malhas quadriculadas', area: 'Matemática', level: '5º Ano' } }),
+  ])
+  const saebDescs5 = [lp5D1, lp5D3, lp5D7, lp5D14, mt5D14, mt5D21]
 
   // ─── ENEM Competencies ────────────────────────────────────────────────────────
   await Promise.all([
@@ -226,6 +243,7 @@ async function main() {
     let gIdx = cfg.idxOff
     type SInfo = { id: string; idx: number }
     const ninth: SInfo[] = []
+    const fifth: SInfo[] = []
     const atRisk: { id: string; name: string; idx: number }[] = []
 
     for (const cls of allClasses) {
@@ -243,6 +261,7 @@ async function main() {
       created.forEach((s, i) => {
         const absIdx = gIdx + i
         if (cls.code === '9') ninth.push({ id: s.id, idx: absIdx })
+        if (cls.code === '5') fifth.push({ id: s.id, idx: absIdx })
         if (i % 10 === 0)    atRisk.push({ id: s.id, name: s.name, idx: absIdx })
       })
       gIdx += cfg.spc
@@ -305,7 +324,7 @@ async function main() {
         await prisma.studentSaebPerformance.createMany({ data: data.slice(i, i + 100) })
     }
 
-    return { school, pedUser, tchPort, tchMat, tchCien, tchHist, tchGeo, tPortU, tMatU, tCienU, tHistU, tGeoU, allClasses, ninth }
+    return { school, pedUser, tchPort, tchMat, tchCien, tchHist, tchGeo, tPortU, tMatU, tCienU, tHistU, tGeoU, allClasses, ninth, fifth }
   }
 
   // ─── School A: Curitiba — better performance ──────────────────────────────────
@@ -385,6 +404,77 @@ async function main() {
 
       for (let j = 0; j < recs.length; j += 100) await prisma.gradeRecord.createMany({ data: recs.slice(j, j + 100) })
     }
+  }
+
+  // ─── SAEB 5th grade performance ───────────────────────────────────────────────
+  console.log('  Creating 5th grade SAEB performance...')
+  for (const desc of saebDescs5) {
+    const data5A = A.fifth.map(s => {
+      const t = getTier(s.idx, 0.08, 0.40)
+      const sc = saebScore(t, s.idx + desc.code.charCodeAt(3))
+      return { studentId: s.id, descriptorId: desc.id, score: sc, level: saebLevel(sc), year: 2024 }
+    })
+    const data5B = B.fifth.map(s => {
+      const t = getTier(s.idx, 0.20, 0.45)
+      const sc = saebScore(t, s.idx + desc.code.charCodeAt(3))
+      return { studentId: s.id, descriptorId: desc.id, score: sc, level: saebLevel(sc), year: 2024 }
+    })
+    const all5 = [...data5A, ...data5B]
+    for (let i = 0; i < all5.length; i += 100) await prisma.studentSaebPerformance.createMany({ data: all5.slice(i, i + 100) })
+  }
+
+  // ─── ENEM performance for all 9th graders ────────────────────────────────────
+  console.log('  Creating ENEM performance for 9th graders...')
+  const enemComps = await prisma.enemCompetency.findMany()
+  const allNinth = [...A.ninth, ...B.ninth]
+  const enemData = allNinth.flatMap(s => {
+    const isB = s.idx >= 1000
+    const [lP, mP] = isB ? [0.15, 0.45] : [0.05, 0.35]
+    return enemComps.map((c, ci) => {
+      const t = getTier(s.idx + ci * 7, lP, mP)
+      return { studentId: s.id, competencyId: c.id, score: enemScore(t, s.idx + ci * 13), year: 2024 }
+    })
+  })
+  for (let i = 0; i < enemData.length; i += 100) await prisma.studentEnemPerformance.createMany({ data: enemData.slice(i, i + 100) })
+
+  // ─── Homework + submissions ───────────────────────────────────────────────────
+  console.log('  Creating homework and submissions...')
+  type HwTask = { classId: string; subjectId: string; title: string; instructions: string; dueDate: Date; rate: number }
+  const hwTasks: HwTask[] = [
+    { classId: cls(A,'9','A').id, subjectId: subPort.id, title: 'Análise de crônica — "A Bolsa Amarela"', instructions: 'Identifique narrador, tempo e espaço. Escreva parágrafo sobre o tema central.', dueDate: new Date(2024, 2, 18), rate: 0.88 },
+    { classId: cls(A,'9','A').id, subjectId: subMat.id,  title: 'Exercícios: Funções do 1º Grau',         instructions: 'Resolva os exercícios 1 a 8 da lista entregue em sala.', dueDate: new Date(2024, 2, 15), rate: 0.80 },
+    { classId: cls(A,'9','A').id, subjectId: subPort.id, title: 'Produção textual: mini-crônica',          instructions: 'Escreva uma crônica de 15 a 20 linhas sobre um acontecimento do cotidiano escolar.', dueDate: new Date(2024, 2, 25), rate: 0.75 },
+    { classId: cls(A,'9','B').id, subjectId: subPort.id, title: 'Interpretação: "A Cartomante" (Machado)', instructions: 'Responda as questões com argumentação. Mínimo 3 linhas por resposta.', dueDate: new Date(2024, 2, 20), rate: 0.70 },
+    { classId: cls(A,'9','B').id, subjectId: subMat.id,  title: 'Gráficos de funções quadráticas',        instructions: 'Esboce os gráficos das 6 funções e identifique vértice e raízes.', dueDate: new Date(2024, 3, 5), rate: 0.65 },
+    { classId: cls(A,'8','A').id, subjectId: subMat.id,  title: 'Lista: Equações do 2º Grau',             instructions: 'Resolva as 10 equações com Bhaskara. Mostre o desenvolvimento completo.', dueDate: new Date(2024, 3, 10), rate: 0.60 },
+    { classId: cls(A,'8','A').id, subjectId: subCien.id, title: 'Pesquisa: Biomas Brasileiros',            instructions: 'Apresente 3 biomas: características, fauna, flora e ameaças. Uma página cada.', dueDate: new Date(2024, 3, 15), rate: 0.55 },
+    { classId: cls(A,'7','A').id, subjectId: subCien.id, title: 'Mapa de cadeia alimentar',               instructions: 'Elabore mapa conceitual de uma cadeia alimentar do Cerrado com todos os níveis.', dueDate: new Date(2024, 2, 18), rate: 0.78 },
+    { classId: cls(A,'7','A').id, subjectId: subHist.id, title: 'Linha do tempo: Brasil Colonial',        instructions: 'Construa linha do tempo ilustrada dos principais eventos coloniais (1500-1822).', dueDate: new Date(2024, 3, 20), rate: 0.72 },
+    { classId: cls(A,'5','A').id, subjectId: subPort.id, title: 'Caligrafia e ortografia — lista 4',      instructions: 'Escreva cada palavra 3 vezes e use-a em uma frase completa.', dueDate: new Date(2024, 2, 14), rate: 0.92 },
+    { classId: cls(A,'5','A').id, subjectId: subMat.id,  title: 'Tabuada do 6 ao 9 — exercícios',        instructions: 'Resolva os 30 exercícios de multiplicação e divisão da folha entregue.', dueDate: new Date(2024, 2, 12), rate: 0.85 },
+    { classId: cls(B,'9','A').id, subjectId: subPort.id, title: 'Exercícios de inferência',               instructions: 'Leia o texto e responda as 8 questões de inferência com justificativa.', dueDate: new Date(2024, 2, 18), rate: 0.52 },
+    { classId: cls(B,'9','A').id, subjectId: subMat.id,  title: 'Sistemas de equações — prática',        instructions: 'Resolva 6 sistemas pelo método de substituição. Mostre todos os passos.', dueDate: new Date(2024, 3, 10), rate: 0.45 },
+    { classId: cls(B,'8','A').id, subjectId: subMat.id,  title: 'Revisão: equações do 1º grau',          instructions: 'Lista de 12 equações. Foco no isolamento da variável.', dueDate: new Date(2024, 3, 8), rate: 0.40 },
+    { classId: cls(B,'9','A').id, subjectId: subCien.id, title: 'Tabela de Punnett — herança genética',  instructions: 'Complete as 5 tabelas de Punnett e calcule as probabilidades fenotípicas.', dueDate: new Date(2024, 3, 15), rate: 0.58 },
+    { classId: cls(B,'9','B').id, subjectId: subPort.id, title: 'Artigo de opinião: redes sociais',      instructions: 'Escreva artigo de 20 linhas com tese, 2 argumentos e proposta de intervenção.', dueDate: new Date(2024, 3, 22), rate: 0.62 },
+    { classId: cls(B,'7','A').id, subjectId: subMat.id,  title: 'Operações com inteiros negativos',      instructions: 'Resolva os 15 exercícios de adição e subtração com números negativos.', dueDate: new Date(2024, 3, 14), rate: 0.68 },
+  ]
+
+  for (const hw of hwTasks) {
+    const hwRec = await prisma.homework.create({
+      data: { classId: hw.classId, subjectId: hw.subjectId, title: hw.title, instructions: hw.instructions, dueDate: hw.dueDate },
+    })
+    const studs = await prisma.student.findMany({ where: { classId: hw.classId }, select: { id: true } })
+    const subs: any[] = []
+    studs.forEach((s, i) => {
+      if (Math.abs(Math.sin(i * 4.13 + hw.rate * 10)) % 1 < hw.rate) {
+        subs.push({
+          homeworkId: hwRec.id, studentId: s.id, waygroundStatus: 'ENTREGUE',
+          submittedAt: new Date(hw.dueDate.getTime() - Math.floor(Math.abs(Math.sin(i * 1.7)) * 2) * 86400000),
+        })
+      }
+    })
+    for (let j = 0; j < subs.length; j += 100) await prisma.homeworkSubmission.createMany({ data: subs.slice(j, j + 100) })
   }
 
   // ─── Interdisciplinary lesson: Crise Hídrica (School A, 9A) ──────────────────
@@ -555,14 +645,79 @@ async function main() {
     }})
   }
 
+  // ─── Additional class records for full teacher coverage ─────────────────────
+  console.log('  Creating additional class records...')
+  await prisma.classRecord.createMany({ data: [
+    // School A — Marcos Fonseca (Geo)
+    { classId: cls(A,'9','A').id, teacherId: A.tchGeo.id, subjectId: subGeo.id, userId: A.tGeoU.id, date: new Date(2024,3,8), contentDeveloped: 'Geopolítica contemporânea: blocos econômicos e relações de poder. Papel do Brasil no Mercosul e BRICS. Análise de mapas políticos atuais.', observations: 'Alunos demonstraram bom conhecimento prévio sobre globalização. Debate sobre soberania nacional gerou reflexões construtivas.', pending: 'Parei antes de conflitos por recursos naturais. Próxima: petróleo e disputas territoriais.' },
+    { classId: cls(A,'9','B').id, teacherId: A.tchGeo.id, subjectId: subGeo.id, userId: A.tGeoU.id, date: new Date(2024,3,9), contentDeveloped: 'Climatologia: zonas climáticas e interferência humana. El Niño e La Niña — impactos no Brasil. Análise de mapas climáticos comparativos.', observations: 'Turma engajada após chuvas intensas na semana em Curitiba. Alunos trouxeram notícias sobre enchentes no RS espontaneamente.', pending: 'Parei no mapa de biomas × clima. Próxima: desmatamento e mudanças climáticas regionais.' },
+    { classId: cls(A,'8','A').id, teacherId: A.tchGeo.id, subjectId: subGeo.id, userId: A.tGeoU.id, date: new Date(2024,2,19), contentDeveloped: 'Urbanização brasileira: êxodo rural, crescimento desordenado e problemas nas metrópoles. Estudo de caso: Curitiba e seu planejamento urbano referência.', observations: 'Uso do exemplo de Curitiba foi muito eficaz — alunos reconhecem os elementos da própria cidade. Comparação com São Paulo facilitou compreensão das diferenças de gestão.', pending: 'Parei no conceito de mobilidade urbana. Próxima: transporte e segregação socioespacial.' },
+    { classId: cls(A,'7','A').id, teacherId: A.tchGeo.id, subjectId: subGeo.id, userId: A.tGeoU.id, date: new Date(2024,2,20), contentDeveloped: 'Biomas brasileiros: Mata Atlântica, Cerrado, Pantanal e Amazônia. Biodiversidade e ameaças. Análise de imagens de satélite mostrando desmatamento no Paraná.', observations: 'Imagens de satélite causaram impacto real — alunos identificaram regiões próximas que foram desmatadas. Engajamento ambiental alto nessa turma.', pending: 'Parei na legislação ambiental. Próxima: APA e unidades de conservação.' },
+    // School A — Juliana Costa (Hist) — more classes
+    { classId: cls(A,'8','A').id, teacherId: A.tchHist.id, subjectId: subHist.id, userId: A.tHistU.id, date: new Date(2024,2,6), contentDeveloped: 'Revolução Industrial: causas, fases e impactos sociais. Surgimento do proletariado. Análise de fontes primárias (imagens de fábricas e trabalho infantil no séc. XIX).', observations: 'Imagens de crianças em fábricas geraram forte impacto. Conexão com trabalho infantil atual foi feita pelos próprios alunos — debate de alta qualidade.', pending: 'Parei antes do ludismo e cartismo. Próxima: movimentos operários e origem do socialismo.' },
+    { classId: cls(A,'7','A').id, teacherId: A.tchHist.id, subjectId: subHist.id, userId: A.tHistU.id, date: new Date(2024,2,7), contentDeveloped: 'Brasil Colonial: Capitanias Hereditárias e Governo-Geral. Sistema de sesmarias e conflitos com povos indígenas. Introdução à economia açucareira.', observations: 'Turma participativa — bom interesse por história do Brasil, provável influência da Olimpíada de História. Dificuldade em situar eventos no mapa colonial.', pending: 'Parei na estrutura do engenho. Próxima: escravidão africana e resistência.' },
+    { classId: cls(A,'6','A').id, teacherId: A.tchHist.id, subjectId: subHist.id, userId: A.tHistU.id, date: new Date(2024,2,13), contentDeveloped: 'Antiguidade Clássica: Grécia e Roma. Democracia ateniense × República romana. A herança greco-romana na cultura ocidental contemporânea.', observations: 'Alunos do 6º surpreenderam com perguntas sobre escravidão e se ela era diferente da brasileira — comparação histórica espontânea excelente.', pending: 'Parei antes das guerras Púnicas. Próxima: queda de Roma e transição para Idade Média.' },
+    // School A — Felipe Braga (Cien) — more classes
+    { classId: cls(A,'8','A').id, teacherId: A.tchCien.id, subjectId: subCien.id, userId: A.tCienU.id, date: new Date(2024,2,8), contentDeveloped: 'Tabela periódica: classificação, grupos e períodos. Propriedades dos metais e não-metais. Elementos do cotidiano (ferro, cobre, ouro, cloro).', observations: 'Primeiro contato com tabela periódica no 8º ano — entusiasmo bom. Alunos associaram elementos ao cotidiano. Dificuldade prevista para memorização de símbolos.', pending: 'Parei nos grupos e períodos. Próxima: ligações químicas iônicas com modelos físicos.' },
+    { classId: cls(A,'6','A').id, teacherId: A.tchCien.id, subjectId: subCien.id, userId: A.tCienU.id, date: new Date(2024,2,12), contentDeveloped: 'Célula: estrutura e organelas. Diferenças entre procariota e eucariota. Aula prática: observação de células de cebola no microscópio óptico.', observations: 'Prática com microscópio foi o ponto alto — filas para olhar! Dois microscópios com problema técnico reduziram tempo de observação. Solicitei manutenção.', pending: 'Parei na membrana plasmática. Próxima: mitocôndria e fotossíntese.' },
+    // School A — Carlos Zanetti (Mat) — more classes
+    { classId: cls(A,'8','A').id, teacherId: A.tchMat.id, subjectId: subMat.id, userId: A.tMatU.id, date: new Date(2024,2,7), contentDeveloped: 'Potenciação e radiciação. Notação científica aplicada a astronomia (distâncias em anos-luz) e biologia (tamanho de vírus).', observations: 'Contextualização com ciências funcionou muito bem. Turma engajada. Três alunos com dificuldade de base em multiplicação de decimais — encaminhados para reforço.', pending: 'Parei em raízes quadradas exatas. Próxima: estimativas e radiciação com calculadora.' },
+    { classId: cls(A,'7','A').id, teacherId: A.tchMat.id, subjectId: subMat.id, userId: A.tMatU.id, date: new Date(2024,2,8), contentDeveloped: 'Frações: operações com denominadores diferentes. MMC aplicado. Problemas contextualizados com receitas culinárias e partilha.', observations: 'Contexto de receitas funcionou muito bem — alunos trouxeram exemplos da própria família. MMC ainda confunde muitos; retomar com exercícios mais graduados.', pending: 'Parei na divisão de frações. Próxima: fração decimal e porcentagem básica.' },
+    { classId: cls(A,'5','A').id, teacherId: A.tchMat.id, subjectId: subMat.id, userId: A.tMatU.id, date: new Date(2024,2,11), contentDeveloped: 'Multiplicação de 2 dígitos por 2 dígitos. Produto parcial e algoritmo convencional. Situações-problema com supermercado.', observations: 'Turma heterogênea: 4 alunos dominam plenamente, 5 ainda não automatizaram tabuadas. Organização em grupos de ajuda mútua funcionou bem.', pending: 'Parei em problemas de dois passos. Próxima: divisão com resto.' },
+    // School A — Ana Batista (Port) — more classes
+    { classId: cls(A,'8','A').id, teacherId: A.tchPort.id, subjectId: subPort.id, userId: A.tPortU.id, date: new Date(2024,2,5), contentDeveloped: 'Gênero: reportagem. Estrutura, linguagem objetiva, lead e pirâmide invertida. Leitura comparada de duas reportagens sobre o mesmo fato com linhas editoriais distintas.', observations: 'Alunos perceberam como o mesmo fato é apresentado diferentemente conforme a linha editorial. Dificuldade em identificar a fonte primária das reportagens.', pending: 'Parei na análise de autoria. Próxima: produção de reportagem sobre tema escolar.' },
+    { classId: cls(A,'7','A').id, teacherId: A.tchPort.id, subjectId: subPort.id, userId: A.tPortU.id, date: new Date(2024,2,6), contentDeveloped: 'Conto de suspense: "O Espelho" de Machado de Assis. Leitura dramatizada, elementos do fantástico, vocabulário do século XIX.', observations: 'Leitura dramatizada funcionou bem para o 7º ano — alunos adoraram os papéis. Vocabulário oitocentista gerou dificuldade mas também curiosidade lexical.', pending: 'Parei antes de analisar o narrador. Próxima: produção de conto de suspense com estrutura orientada.' },
+    { classId: cls(A,'5','A').id, teacherId: A.tchPort.id, subjectId: subPort.id, userId: A.tPortU.id, date: new Date(2024,2,10), contentDeveloped: 'Texto instrucional: receita e manual de brinquedo. Identificação de verbos no imperativo e ordem das etapas. Produção de instrução de jogo inventado.', observations: 'Proposta de inventar o próprio jogo mobilizou muito a turma. As instruções produzidas foram criativas e funcionais — indicador excelente de letramento funcional para o 5º ano.', pending: 'Parei antes de poesia concreta. Próxima: texto poético e figuras de linguagem simples.' },
+    // School B — Sandra Vieira (Port)
+    { classId: cls(B,'9','B').id, teacherId: B.tchPort.id, subjectId: subPort.id, userId: B.tPortU.id, date: new Date(2024,2,8), contentDeveloped: 'Artigo de opinião: estrutura argumentativa, tese, argumentos e contra-argumento. Leitura de artigo sobre redes sociais e aprendizagem.', observations: 'Turma 9B demonstra mais maturidade leitora que a 9A. Debate animado — alunos trouxeram experiências próprias. Dificuldade em contra-argumentar sem invalidar o argumento adverso.', pending: 'Parei na proposta de intervenção. Próxima: produção textual com tema gerador.' },
+    { classId: cls(B,'8','A').id, teacherId: B.tchPort.id, subjectId: subPort.id, userId: B.tPortU.id, date: new Date(2024,3,5), contentDeveloped: 'Figuras de linguagem: metáfora, metonímia e personificação. Análise de letras do Criolo e Emicida.', observations: 'Uso das músicas foi excelente — engajamento imediato. Metáfora e personificação bem absorvidas; metonímia ainda causa confusão. Três alunos produziram metáforas criativas excelentes.', pending: 'Parei em ironia e antítese. Próxima: hipérbole com análise de publicidade.' },
+    // School B — Wagner Souza (Mat)
+    { classId: cls(B,'9','B').id, teacherId: B.tchMat.id, subjectId: subMat.id, userId: B.tMatU.id, date: new Date(2024,3,5), contentDeveloped: 'Geometria plana: áreas de triângulos, trapézios e círculos. Aplicações em projetos de arquitetura simples — planta baixa de cômodo.', observations: 'Projeto de "planta baixa" motivou muito. Dificuldade com área circular — pi e aproximações geraram dúvidas. Precisarei retomar com atividade manipulativa.', pending: 'Parei antes de volumes. Próxima: cilindro e cone — usar latas e cones de sorvete.' },
+    { classId: cls(B,'7','A').id, teacherId: B.tchMat.id, subjectId: subMat.id, userId: B.tMatU.id, date: new Date(2024,3,6), contentDeveloped: 'Números inteiros negativos: representação na reta numérica, adição e subtração. Contexto de temperatura (positivo = acima de zero, negativo = abaixo de zero).', observations: 'Contexto de temperatura ajudou a concretizar os negativos — alunos do Paraná conhecem frio bem. Dificuldade em subtração de negativos persiste em 7 alunos.', pending: 'Parei na multiplicação de inteiros. Próxima: regra dos sinais com mais exemplos.' },
+    // School B — Renata Borges (Cien)
+    { classId: cls(B,'8','A').id, teacherId: B.tchCien.id, subjectId: subCien.id, userId: B.tCienU.id, date: new Date(2024,2,12), contentDeveloped: 'Reações químicas: evidências (cor, precipitado, gás, calor). Experimento: vinagre + bicarbonato. Conceito de reagentes e produtos. Equação química simplificada.', observations: 'Experimento foi sucesso absoluto — todos participaram com entusiasmo. Dificuldade em equilibrar equações simples; preciso reforçar átomo e molécula antes de avançar.', pending: 'Parei nos tipos de reação. Próxima: síntese, análise e dupla troca com exemplos do cotidiano.' },
+    { classId: cls(B,'7','A').id, teacherId: B.tchCien.id, subjectId: subCien.id, userId: B.tCienU.id, date: new Date(2024,2,10), contentDeveloped: 'Ecossistemas do Paraná: Mata Atlântica e campos nativos. Espécies ameaçadas: onça-parda, papagaio-de-cara-roxa e pinheiro-do-Paraná. Cadeia alimentar local.', observations: 'Tema local gerou muito engajamento — vários alunos já viram onças ou pinheiros na família. O regionalismo no ensino de ciências funciona muito bem como motivador.', pending: 'Parei nas ameaças antrópicas. Próxima: desmatamento e lei da Mata Atlântica.' },
+    // School B — Gustavo Leal (Hist)
+    { classId: cls(B,'9','A').id, teacherId: B.tchHist.id, subjectId: subHist.id, userId: B.tHistU.id, date: new Date(2024,3,4), contentDeveloped: 'Segunda Guerra Mundial e o Brasil — Força Expedicionária Brasileira. Depoimentos de pracinhas paranaenses. Linha do tempo colaborativa no quadro.', observations: 'Turma surpreendentemente engajada — um aluno é neto de pracinha e emocionou a turma com relato. Aula transformou-se em roda de história oral de qualidade rara.', pending: 'Parei antes do Holocausto. Próxima: genocídio como crime contra humanidade — abordagem com cuidado.' },
+    { classId: cls(B,'8','A').id, teacherId: B.tchHist.id, subjectId: subHist.id, userId: B.tHistU.id, date: new Date(2024,2,7), contentDeveloped: 'Industrialização no Brasil: Era Vargas e o nacional-desenvolvimentismo. Criação da Petrobras. Migração interna e urbanização acelerada (1930-1960).', observations: 'Alunos de Londrina perceberam conexão com o desenvolvimento da cidade no período — a industrialização chegou ao Paraná com força nos anos 40-50.', pending: 'Parei antes da ditadura militar. Próxima: JK e construção de Brasília.' },
+    // School B — Adriana Matos (Geo)
+    { classId: cls(B,'9','A').id, teacherId: B.tchGeo.id, subjectId: subGeo.id, userId: B.tGeoU.id, date: new Date(2024,3,5), contentDeveloped: 'Globalização e desigualdades. Norte × Sul global. IDH: comparação entre Brasil, EUA, Moçambique e Noruega. Análise crítica de indicadores.', observations: 'Alunos questionaram por que o Brasil não sobe no IDH apesar da riqueza natural — debate maduro sobre estrutura econômica e desigualdade.', pending: 'Parei antes do papel das multinacionais. Próxima: fluxos migratórios e refugiados.' },
+    { classId: cls(B,'8','A').id, teacherId: B.tchGeo.id, subjectId: subGeo.id, userId: B.tGeoU.id, date: new Date(2024,2,8), contentDeveloped: 'Cartografia: projeções, escala e orientação. Uso de Google Maps e GPS — conexão com cartografia científica. Leitura de mapa topográfico simplificado.', observations: 'Uso do celular foi muito motivador — alunos localizaram as próprias casas. Transição para mapa topográfico foi difícil; pensamento 3D em 2D é desafio real.', pending: 'Parei em curvas de nível. Próxima: atividade prática no pátio da escola.' },
+  ] })
+
+  // ─── Academic history for upper-grade students ────────────────────────────────
+  console.log('  Creating academic history...')
+  for (const school of [A, B]) {
+    const upperCls = school.allClasses.filter(c => ['6','7','8','9'].includes(c.code))
+    for (const c of upperCls) {
+      const grade = parseInt(c.code)
+      const studs = await prisma.student.findMany({ where: { classId: c.id }, select: { id: true }, take: 15 })
+      await prisma.academicHistory.createMany({
+        data: studs.map((s, i) => ({
+          studentId: s.id, year: 2023,
+          className: `${grade - 1}º Ano ${c.letter}`,
+          schoolName: school.school.name,
+          observations: i % 5 === 0
+            ? 'Recuperação em Matemática concluída. Promovido(a) com rendimento satisfatório.'
+            : i % 7 === 0
+            ? 'Frequência irregular no 2º semestre. Conselho de classe deliberou por aprovação com ressalvas.'
+            : null,
+        })),
+      })
+    }
+  }
+
   console.log('\n✅ Demo seed complete!')
   console.log('\n📊 Summary:')
   console.log('  School A — E.E. Prof. Anísio Teixeira (Curitiba): 875 students, ~5% below avg')
   console.log('  School B — E.E. Monteiro Lobato (Londrina):        900 students, ~15% below avg')
   console.log('  ~100 at-risk students per school with family records (absence + meeting + busca ativa)')
-  console.log('  9th grade SAEB performance data (LP + MT, 7 descriptors) for both schools')
+  console.log('  9th + 5th grade SAEB performance (LP + MT descriptors) for both schools')
+  console.log('  ENEM mock performance for all 9th graders (5 competencies)')
+  console.log('  17 homework assignments with real submission rates across 8 classes')
   console.log('  Interdisciplinary lesson: "A Crise Hídrica" — Math + Science + Portuguese (School A, 9A)')
-  console.log('  Lessons with teacher diaries for both schools')
+  console.log('  Full teacher diary coverage — all 10 teachers with records across multiple classes')
+  console.log('  Academic history (2023) for upper-grade students')
   console.log('\n🔑 Credentials:')
   console.log('  Secretaria SEDUC:  secretaria@seduc.pr.gov.br    / seduc2024')
   console.log('  Dir. Escola A:     diretora@eeteixeira.pr.edu.br / admin123')
