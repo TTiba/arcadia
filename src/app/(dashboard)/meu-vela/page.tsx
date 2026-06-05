@@ -81,8 +81,10 @@ export default function MeuVelaPage() {
           config: preview.config,
         }),
       })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error)
+      const text = await res.text()
+      let data: any
+      try { data = JSON.parse(text) } catch { throw new Error(text.slice(0, 120) || 'Resposta inválida do servidor') }
+      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`)
       toast({ title: 'Dashboard salvo!' })
       setPreview(null)
       setPrompt('')

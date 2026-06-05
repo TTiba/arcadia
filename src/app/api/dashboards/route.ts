@@ -26,9 +26,13 @@ export async function POST(req: NextRequest) {
 
   if (!name || !config) return NextResponse.json({ error: 'name and config required' }, { status: 400 })
 
-  const dashboard = await prisma.userDashboard.create({
-    data: { userId, name, description, prompt, config: JSON.stringify(config) },
-  })
-
-  return NextResponse.json(dashboard, { status: 201 })
+  try {
+    const dashboard = await prisma.userDashboard.create({
+      data: { userId, name, description, prompt, config: JSON.stringify(config) },
+    })
+    return NextResponse.json(dashboard, { status: 201 })
+  } catch (e: any) {
+    console.error('[POST /api/dashboards]', e?.message)
+    return NextResponse.json({ error: e?.message ?? 'Erro ao salvar dashboard' }, { status: 500 })
+  }
 }
