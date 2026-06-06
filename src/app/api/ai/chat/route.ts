@@ -4,7 +4,12 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import Anthropic from '@anthropic-ai/sdk'
 
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+// Lazy client — avoids SDK throwing at module load when key is absent
+let _client: Anthropic | null = null
+function getClient() {
+  if (!_client) _client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+  return _client
+}
 
 const MAX_HISTORY = 6
 
@@ -225,12 +230,26 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  const { messages } = await req.json()
+  let body: any
+  try { body = await req.json() } catch {
+    return NextResponse.json({ error: 'JSON inválido no corpo da requisição.' }, { status: 400 })
+  }
+
+  const { messages } = body
   if (!Array.isArray(messages) || messages.length === 0) {
     return NextResponse.json({ error: 'messages array required' }, { status: 400 })
   }
 
-  const schoolData = await buildSchoolContext()
+  let schoolData: any
+  try {
+    schoolData = await buildSchoolContext()
+  } catch (err: any) {
+    console.error('[AI chat] buildSchoolContext failed:', err)
+    return NextResponse.json(
+      { error: `Erro ao carregar contexto escolar: ${err?.message ?? 'erro desconhecido'}` },
+      { status: 500 }
+    )
+  }
 
   const systemPrompt = `Você é o Assistente Pedagógico Vela — especializado em análise de dados educacionais para secretarias e gestores escolares.
 
@@ -259,25 +278,35 @@ INSTRUÇÕES:
   const lastUserMessage = [...recentMessages].reverse().find(m => m.role === 'user')?.content ?? ''
   const model = selectModel(lastUserMessage)
 
-  const response = await client.messages.create({
-    model,
-    max_tokens: 1500,
-    system: [
-      {
-        type: 'text',
-        text: systemPrompt,
-        // @ts-expect-error cache_control is supported but not yet in SDK types
-        cache_control: { type: 'ephemeral' },
-      }
-    ],
-    messages: recentMessages.map((m: { role: string; content: string }) => ({
-      role: m.role as 'user' | 'assistant',
-      content: m.content,
-    })),
-  })
+  let response: Anthropic.Message
+  try {
+    response = await getClient().messages.create({
+      model,
+      max_tokens: 1500,
+      system: [
+        {
+          type: 'text',
+          text: systemPrompt,
+          // @ts-expect-error cache_control is supported but not yet in SDK types
+          cache_control: { type: 'ephemeral' },
+        }
+      ],
+      messages: recentMessages.map((m: { role: string; content: string }) => ({
+        role: m.role as 'user' | 'assistant',
+        content: m.content,
+      })),
+    })
+  } catch (err: any) {
+    console.error('[AI chat] Anthropic API error:', err)
+    const msg = err?.status === 401
+      ? 'Chave da API inválida. Verifique ANTHROPIC_API_KEY no .env.'
+      : err?.status === 429
+      ? 'Limite de requisições atingido. Aguarde um momento e tente novamente.'
+      : `Erro na API de IA: ${err?.message ?? 'erro desconhecido'}`
+    return NextResponse.json({ error: msg }, { status: 502 })
+  }
 
   const text = response.content[0].type === 'text' ? response.content[0].text : ''
-  // Cast to any to read cache token fields not yet in SDK types
   const u = response.usage as any
   const cost = calcCost(model, {
     input_tokens: u.input_tokens ?? 0,

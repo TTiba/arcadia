@@ -236,14 +236,18 @@ export default function AssistentePage() {
         }),
       })
 
-      const data = await res.json()
+      let data: any
+      try { data = await res.json() } catch {
+        setError(`Erro ${res.status}: resposta inesperada do servidor. Verifique os logs.`)
+        return
+      }
       if (!res.ok) {
-        setError(data.error || 'Erro ao conectar com o assistente.')
+        setError(data.error || `Erro ${res.status} ao conectar com o assistente.`)
       } else {
         setMessages(prev => [...prev, { role: 'assistant', content: data.message, model: data.model, cost: data.cost }])
       }
-    } catch {
-      setError('Erro de rede. Verifique sua conexão.')
+    } catch (err: any) {
+      setError(err?.message ? `Erro de rede: ${err.message}` : 'Erro de rede. Verifique sua conexão.')
     } finally {
       setLoading(false)
     }

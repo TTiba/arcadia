@@ -4,7 +4,11 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import Anthropic from '@anthropic-ai/sdk'
 
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+let _client: Anthropic | null = null
+function getClient() {
+  if (!_client) _client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+  return _client
+}
 
 export async function POST(_req: NextRequest, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions)
@@ -57,7 +61,7 @@ Elabore um resumo que:
 
 Seja conciso (máximo 250 palavras) e use linguagem profissional adequada ao contexto escolar.`
 
-  const response = await client.messages.create({
+  const response = await getClient().messages.create({
     model: 'claude-haiku-4-5-20251001',
     max_tokens: 600,
     messages: [{ role: 'user', content: prompt }],
