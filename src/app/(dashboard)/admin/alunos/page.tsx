@@ -469,7 +469,7 @@ export default function AlunosPage() {
   const searchParams = useSearchParams()
   const [students, setStudents] = useState<Student[]>([])
   const [classes, setClasses] = useState<ClassItem[]>([])
-  const [filters, setFilters] = useState<Filters>(loadFilters)
+  const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS)
   const [sortCol, setSortCol] = useState<SortCol>('name')
   const [sortDir, setSortDir] = useState<SortDir>('asc')
   const [open, setOpen] = useState(false)
@@ -481,10 +481,17 @@ export default function AlunosPage() {
   const fileRef = useRef<HTMLInputElement>(null)
   const { toast } = useToast()
 
+  // Load saved filters after hydration (avoid SSR mismatch)
   useEffect(() => {
+    const saved = loadFilters()
     const urlFilter = searchParams.get('filter')
-    if (urlFilter === 'sem-tarefas') setFilters(f => ({ ...f, status: 'ATIVO' }))
-  }, [searchParams])
+    if (urlFilter === 'sem-tarefas') {
+      setFilters({ ...saved, status: 'ATIVO' })
+    } else {
+      setFilters(saved)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
     try { localStorage.setItem(FILTER_KEY, JSON.stringify(filters)) } catch {}
