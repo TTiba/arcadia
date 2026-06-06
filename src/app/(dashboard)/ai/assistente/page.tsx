@@ -192,14 +192,17 @@ function loadStoredMessages(): Message[] {
 }
 
 export default function AssistentePage() {
-  const [messages, setMessages] = useState<Message[]>(() => {
-    const stored = loadStoredMessages()
-    return stored.length > 0 ? stored : [{ role: 'assistant', content: WELCOME_CONTENT }]
-  })
+  const [messages, setMessages] = useState<Message[]>([{ role: 'assistant', content: WELCOME_CONTENT }])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
+
+  // Load stored history after mount (avoid hydration mismatch)
+  useEffect(() => {
+    const stored = loadStoredMessages()
+    if (stored.length > 0) setMessages(stored)
+  }, [])
 
   // Persist history to localStorage on every change
   useEffect(() => {
