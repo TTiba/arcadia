@@ -14,7 +14,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
   Plus, Search, UserCheck, Eye, ChevronUp, ChevronDown, ChevronsUpDown,
-  Camera, X, Trash2, BookOpen, ChevronRight, Clock,
+  Camera, X, Trash2, BookOpen, ChevronRight, Clock, Sparkles,
 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { STATUS_LABELS, ASSESSMENT_TYPE_LABELS, formatDate } from '@/lib/utils'
@@ -303,12 +303,14 @@ function NotasTab({
   )
 }
 
-// ─── Histórico Tab ────────────────────────────────────────────────────────────
+// ─── Ficha Disciplinar Tab ────────────────────────────────────────────────────
 
 function HistoricoTab({ studentId, currentUserId }: { studentId: string; currentUserId?: string }) {
   const [logs, setLogs] = useState<StudentLog[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [summarizing, setSummarizing] = useState(false)
+  const [summary, setSummary] = useState<string | null>(null)
   const [form, setForm] = useState({ category: 'OBSERVACAO', content: '' })
   const { toast } = useToast()
 
@@ -350,6 +352,22 @@ function HistoricoTab({ studentId, currentUserId }: { studentId: string; current
     }
   }
 
+  const handleSummarize = async () => {
+    setSummarizing(true)
+    setSummary(null)
+    try {
+      const res = await fetch(`/api/alunos/${studentId}/ai-summary`, { method: 'POST' })
+      if (res.ok) {
+        const data = await res.json()
+        setSummary(data.summary)
+      } else {
+        toast({ title: 'Erro ao gerar resumo', variant: 'destructive' })
+      }
+    } finally {
+      setSummarizing(false)
+    }
+  }
+
   return (
     <div className="pt-4 space-y-4">
       {/* Entry form */}
@@ -370,13 +388,39 @@ function HistoricoTab({ studentId, currentUserId }: { studentId: string; current
             value={form.content}
             onChange={e => setForm(f => ({ ...f, content: e.target.value }))}
           />
-          <div className="flex justify-end">
+          <div className="flex items-center justify-between">
+            <Button
+              size="sm" variant="outline"
+              onClick={handleSummarize}
+              disabled={summarizing || logs.length === 0}
+              className="gap-1.5 text-muted-foreground"
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              {summarizing ? 'Gerando resumo...' : 'Resumo com IA'}
+            </Button>
             <Button size="sm" onClick={handleSave} disabled={saving || !form.content.trim()}>
               {saving ? 'Salvando...' : 'Registrar'}
             </Button>
           </div>
         </CardContent>
       </Card>
+
+      {/* AI summary */}
+      {summary && (
+        <Card className="border-dashed border-teal/50 bg-teal/5">
+          <CardContent className="p-4 space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-semibold flex items-center gap-1.5 text-teal-700 dark:text-teal-300">
+                <Sparkles className="h-3.5 w-3.5" /> Resumo gerado pela IA
+              </p>
+              <button onClick={() => setSummary(null)} className="text-muted-foreground hover:text-foreground">
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+            <p className="text-sm whitespace-pre-wrap leading-relaxed">{summary}</p>
+          </CardContent>
+        </Card>
+      )}
 
       {/* History */}
       {loading ? (
@@ -817,7 +861,7 @@ export default function AlunosPage() {
                   <TabsTrigger value="dados">Dados</TabsTrigger>
                   <TabsTrigger value="responsaveis">Responsáveis</TabsTrigger>
                   <TabsTrigger value="notas">Notas</TabsTrigger>
-                  <TabsTrigger value="historico">Histórico</TabsTrigger>
+                  <TabsTrigger value="historico">Ficha Disciplinar</TabsTrigger>
                   <TabsTrigger value="resumo">Resumo</TabsTrigger>
                 </TabsList>
 
