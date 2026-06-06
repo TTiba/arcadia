@@ -26,7 +26,7 @@ const navItems: NavItem[] = [
   { href: '/mensagens', label: 'Mensagens', icon: MessageSquare, group: 'GESTÃO' },
   { href: '/admin/turmas', label: 'Turmas', icon: School, roles: ['ADMIN', 'COORDENACAO'], group: 'GESTÃO' },
   { href: '/admin/professores', label: 'Professores', icon: Users, roles: ['ADMIN', 'COORDENACAO'], group: 'GESTÃO' },
-  { href: '/admin/alunos', label: 'Alunos', icon: UserCheck, roles: ['ADMIN', 'COORDENACAO'], group: 'GESTÃO' },
+  { href: '/admin/alunos', label: 'Alunos', icon: UserCheck, roles: ['ADMIN', 'COORDENACAO', 'DIRETOR'], group: 'GESTÃO' },
   { href: '/admin/aulas', label: 'Aulas', icon: BookOpen, roles: ['ADMIN', 'COORDENACAO'], group: 'GESTÃO' },
   { href: '/admin/avaliacoes', label: 'Avaliações', icon: Star, roles: ['ADMIN', 'COORDENACAO'], group: 'GESTÃO' },
   // Professor portal items go in GESTÃO too
@@ -35,7 +35,7 @@ const navItems: NavItem[] = [
   { href: '/professor/tarefas', label: 'Tarefas de Casa', icon: CheckSquare, roles: ['PROFESSOR'], group: 'GESTÃO' },
   { href: '/professor/notas', label: 'Notas', icon: Star, roles: ['PROFESSOR'], group: 'GESTÃO' },
   { href: '/professor/chamada', label: 'Chamada', icon: CalendarCheck, roles: ['PROFESSOR'], group: 'GESTÃO' },
-  { href: '/admin/alunos', label: 'Alunos', icon: UserCheck, roles: ['PEDAGOGO'], group: 'GESTÃO' },
+  { href: '/admin/alunos', label: 'Alunos', icon: UserCheck, roles: ['PEDAGOGO', 'PROFESSOR'], group: 'GESTÃO' },
   { href: '/frequencia', label: 'Frequência', icon: CalendarCheck, roles: ['ADMIN', 'COORDENACAO', 'PEDAGOGO'], group: 'GESTÃO' },
   // PEDAGÓGICO
   { href: '/pedagogo/registros', label: 'Registros Pedagógicos', icon: Heart, roles: ['PEDAGOGO', 'COORDENACAO'], group: 'PEDAGÓGICO' },

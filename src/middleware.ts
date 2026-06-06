@@ -8,8 +8,14 @@ export default withAuth(
 
     if (!token) return NextResponse.redirect(new URL('/login', req.url))
 
-    // Admin-only routes
-    if (pathname.startsWith('/admin') && token.role !== 'ADMIN' && token.role !== 'COORDENACAO') {
+    // Admin-only routes (except /admin/alunos — shared with all roles)
+    if (
+      pathname.startsWith('/admin') &&
+      !pathname.startsWith('/admin/alunos') &&
+      token.role !== 'ADMIN' &&
+      token.role !== 'COORDENACAO' &&
+      token.role !== 'DIRETOR'
+    ) {
       return NextResponse.redirect(new URL('/dashboard', req.url))
     }
 

@@ -4,9 +4,25 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { createAuditLog } from '@/lib/audit'
 
+const ALL_ACCESS_ROLES = ['ADMIN', 'COORDENACAO', 'DIRETOR', 'PEDAGOGO']
+
+// Returns allowed classIds for the requesting user, or null if unrestricted
+async function getAllowedClassIds(role: string, userId: string): Promise<string[] | null> {
+  if (ALL_ACCESS_ROLES.includes(role)) return null
+  const teacher = await prisma.teacher.findUnique({
+    where: { userId },
+    select: { teacherClasses: { select: { classId: true } } },
+  })
+  return teacher?.teacherClasses.map(tc => tc.classId) ?? []
+}
+
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const role = (session.user as any).role as string
+  const userId = (session.user as any).id as string
+  const allowedClassIds = await getAllowedClassIds(role, userId)
 
   const { searchParams } = new URL(req.url)
   const classId  = searchParams.get('classId')  || undefined
@@ -33,6 +49,7 @@ export async function GET(req: NextRequest) {
       ...(gradeId ? { class: { gradeId } } : {}),
       ...(status  ? { status } : {}),
       ...(search  ? { OR: [{ name: { contains: search } }, { enrollment: { contains: search } }] } : {}),
+      ...(allowedClassIds !== null ? { classId: { in: allowedClassIds } } : {}),
     },
     include: {
       class: {
@@ -61,7 +78,7 @@ export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const role = (session.user as any).role
-  if (!['ADMIN', 'COORDENACAO'].includes(role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if (!['ADMIN', 'COORDENACAO', 'DIRETOR'].includes(role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const body = await req.json()
   const { guardians, ...studentData } = body

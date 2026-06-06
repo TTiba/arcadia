@@ -4,9 +4,27 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { createAuditLog } from '@/lib/audit'
 
+const ALL_ACCESS_ROLES = ['ADMIN', 'COORDENACAO', 'DIRETOR', 'PEDAGOGO']
+
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const role = (session.user as any).role as string
+  const userId = (session.user as any).id as string
+
+  // Professor: verify the student is in one of their classes
+  if (!ALL_ACCESS_ROLES.includes(role)) {
+    const teacher = await prisma.teacher.findUnique({
+      where: { userId },
+      select: { teacherClasses: { select: { classId: true } } },
+    })
+    const allowedClassIds = teacher?.teacherClasses.map(tc => tc.classId) ?? []
+    const stub = await prisma.student.findUnique({ where: { id: params.id }, select: { classId: true } })
+    if (!stub || !stub.classId || !allowedClassIds.includes(stub.classId)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+  }
 
   const student = await prisma.student.findUnique({
     where: { id: params.id },
