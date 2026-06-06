@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
+import { useSession } from 'next-auth/react'
 import { useSearchParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -13,7 +14,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
   Plus, Search, UserCheck, Eye, ChevronUp, ChevronDown, ChevronsUpDown,
-  Camera, X, Trash2, BookOpen, ChevronRight,
+  Camera, X, Trash2, BookOpen, ChevronRight, Clock,
 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { STATUS_LABELS, ASSESSMENT_TYPE_LABELS, formatDate } from '@/lib/utils'
@@ -70,6 +71,26 @@ interface Guardian {
   phone?: string
   email?: string
   isPrimary: boolean
+}
+
+interface StudentLog {
+  id: string
+  category: string
+  content: string
+  createdAt: string
+  user: { id: string; name: string; role: string }
+}
+
+const LOG_CATEGORIES: Record<string, { label: string; variant: any }> = {
+  OBSERVACAO:      { label: 'Observação',           variant: 'secondary' },
+  REUNIAO:         { label: 'Reunião com família',   variant: 'info' },
+  ADVERTENCIA:     { label: 'Advertência',           variant: 'warning' },
+  ELOGIO:          { label: 'Elogio',                variant: 'success' },
+  OCORRENCIA:      { label: 'Ocorrência disciplinar',variant: 'destructive' },
+  SUSPENSAO:       { label: 'Suspensão',             variant: 'destructive' },
+  ENCAMINHAMENTO:  { label: 'Encaminhamento',        variant: 'info' },
+  CONTATO:         { label: 'Contato com família',   variant: 'secondary' },
+  OUTRO:           { label: 'Outro',                 variant: 'secondary' },
 }
 
 interface ClassItem {
@@ -282,9 +303,125 @@ function NotasTab({
   )
 }
 
+// ─── Histórico Tab ────────────────────────────────────────────────────────────
+
+function HistoricoTab({ studentId, currentUserId }: { studentId: string; currentUserId?: string }) {
+  const [logs, setLogs] = useState<StudentLog[]>([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [form, setForm] = useState({ category: 'OBSERVACAO', content: '' })
+  const { toast } = useToast()
+
+  useEffect(() => {
+    setLoading(true)
+    fetch(`/api/alunos/${studentId}/logs`)
+      .then(r => r.json())
+      .then(data => setLogs(Array.isArray(data) ? data : []))
+      .finally(() => setLoading(false))
+  }, [studentId])
+
+  const handleSave = async () => {
+    if (!form.content.trim()) return
+    setSaving(true)
+    try {
+      const res = await fetch(`/api/alunos/${studentId}/logs`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      })
+      if (res.ok) {
+        const created = await res.json()
+        setLogs(prev => [created, ...prev])
+        setForm({ category: 'OBSERVACAO', content: '' })
+        toast({ title: 'Registro salvo!' })
+      } else {
+        toast({ title: 'Erro ao salvar', variant: 'destructive' })
+      }
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleDelete = async (logId: string) => {
+    const res = await fetch(`/api/alunos/${studentId}/logs?logId=${logId}`, { method: 'DELETE' })
+    if (res.ok) {
+      setLogs(prev => prev.filter(l => l.id !== logId))
+      toast({ title: 'Registro removido' })
+    }
+  }
+
+  return (
+    <div className="pt-4 space-y-4">
+      {/* Entry form */}
+      <Card>
+        <CardContent className="p-4 space-y-3">
+          <select
+            className="h-9 w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm"
+            value={form.category}
+            onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
+          >
+            {Object.entries(LOG_CATEGORIES).map(([k, { label }]) => (
+              <option key={k} value={k}>{label}</option>
+            ))}
+          </select>
+          <Textarea
+            rows={3}
+            placeholder="Descreva a reunião, ocorrência, observação, elogio..."
+            value={form.content}
+            onChange={e => setForm(f => ({ ...f, content: e.target.value }))}
+          />
+          <div className="flex justify-end">
+            <Button size="sm" onClick={handleSave} disabled={saving || !form.content.trim()}>
+              {saving ? 'Salvando...' : 'Registrar'}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* History */}
+      {loading ? (
+        <p className="text-sm text-muted-foreground text-center py-6">Carregando...</p>
+      ) : logs.length === 0 ? (
+        <p className="text-sm text-muted-foreground text-center py-6">Nenhum registro ainda.</p>
+      ) : (
+        <div className="space-y-3">
+          {logs.map(log => {
+            const cat = LOG_CATEGORIES[log.category] ?? { label: log.category, variant: 'secondary' }
+            return (
+              <div key={log.id} className="rounded-lg border p-3 space-y-2">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant={cat.variant}>{cat.label}</Badge>
+                    <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                      <Clock className="h-3 w-3" />
+                      {log.user.name} · {new Date(log.createdAt).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </div>
+                  {log.user.id === currentUserId && (
+                    <button
+                      onClick={() => handleDelete(log.id)}
+                      className="text-muted-foreground hover:text-destructive transition-colors shrink-0"
+                      title="Remover registro"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+                <p className="text-sm whitespace-pre-wrap leading-relaxed">{log.content}</p>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function AlunosPage() {
+  const { data: session } = useSession()
+  const currentUserId = (session?.user as any)?.id as string | undefined
   const searchParams = useSearchParams()
   const [students, setStudents] = useState<Student[]>([])
   const [classes, setClasses] = useState<ClassItem[]>([])
@@ -680,6 +817,7 @@ export default function AlunosPage() {
                   <TabsTrigger value="dados">Dados</TabsTrigger>
                   <TabsTrigger value="responsaveis">Responsáveis</TabsTrigger>
                   <TabsTrigger value="notas">Notas</TabsTrigger>
+                  <TabsTrigger value="historico">Histórico</TabsTrigger>
                   <TabsTrigger value="resumo">Resumo</TabsTrigger>
                 </TabsList>
 
@@ -725,6 +863,10 @@ export default function AlunosPage() {
                     gradeRecords={selected.gradeRecords || []}
                     subjectAbsences={selected.subjectAbsences}
                   />
+                </TabsContent>
+
+                <TabsContent value="historico">
+                  <HistoricoTab studentId={selected.id} currentUserId={currentUserId} />
                 </TabsContent>
 
                 <TabsContent value="resumo" className="pt-4">

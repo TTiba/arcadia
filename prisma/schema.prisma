@@ -28,6 +28,7 @@ model User {
   userDashboards      UserDashboard[]
   sentMessages        Message[] @relation("SentMessages")
   receivedMessages    Message[] @relation("ReceivedMessages")
+  studentLogs         StudentLog[]
 
   @@map("users")
 }
@@ -196,6 +197,7 @@ model Student {
   enemPerformances       StudentEnemPerformance[]
   waygroundResults       WaygroundStudentResult[]
   attendances            StudentAttendance[]
+  logs                   StudentLog[]
 
   @@map("students")
 }
@@ -673,6 +675,23 @@ model Message {
   replies   Message[] @relation("MessageThread")
 
   @@map("messages")
+}
+
+// ─── Student Logs ─────────────────────────────────────────────────────────────
+
+model StudentLog {
+  id        String   @id @default(cuid())
+  studentId String
+  userId    String
+  category  String   @default("OBSERVACAO")
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id])
+
+  @@map("student_logs")
 }
 
 // ─── Attendance ───────────────────────────────────────────────────────────────
