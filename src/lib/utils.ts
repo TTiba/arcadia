@@ -21,11 +21,16 @@ export function formatDateTime(date: Date | string | null | undefined): string {
 
 export const ROLE_LABELS: Record<string, string> = {
   ADMIN: 'Administrador',
-  PROFESSOR: 'Professor',
-  PEDAGOGO: 'Pedagogo',
+  DIRETOR: 'Diretor',
   COORDENACAO: 'Coordenação',
+  PEDAGOGO: 'Pedagogo',
+  SECRETARIO: 'Secretário',
+  PROFESSOR: 'Professor',
   VISUALIZACAO: 'Visualização',
 }
+
+export const STAFF_ROLES = ['PROFESSOR', 'PEDAGOGO', 'SECRETARIO'] as const
+export type StaffRole = typeof STAFF_ROLES[number]
 
 export const STATUS_LABELS: Record<string, string> = {
   ATIVO: 'Ativo',

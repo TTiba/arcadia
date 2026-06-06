@@ -29,6 +29,7 @@ model User {
   sentMessages        Message[] @relation("SentMessages")
   receivedMessages    Message[] @relation("ReceivedMessages")
   studentLogs         StudentLog[]
+  userClasses         UserClass[]
 
   @@map("users")
 }
@@ -113,8 +114,21 @@ model Class {
   assessments    Assessment[]
   homework       Homework[]
   attendances    StudentAttendance[]
+  userClasses    UserClass[]
 
   @@map("classes")
+}
+
+// Associates PEDAGOGO and SECRETARIO users with their classes
+model UserClass {
+  userId  String
+  classId String
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  class Class @relation(fields: [classId], references: [id], onDelete: Cascade)
+
+  @@id([userId, classId])
+  @@map("user_classes")
 }
 
 // ─── Teacher ──────────────────────────────────────────────────────────────────
