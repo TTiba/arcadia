@@ -42,14 +42,13 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
 
   const { searchParams } = new URL(req.url)
   const logId = searchParams.get('logId')
-  if (!logId) return NextResponse.json({ error: 'logId required' }, { status: 400 })
+  if (!logId) return NextResponse.json({ error: 'logId obrigatório' }, { status: 400 })
 
   const log = await prisma.studentLog.findUnique({ where: { id: logId } })
-  if (!log) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  if (!log || log.studentId !== params.id) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  const userId = (session.user as any).id
   const role = (session.user as any).role
-  // Only the author or admin/coordenacao can delete
+  const userId = (session.user as any).id
   if (log.userId !== userId && !['ADMIN', 'COORDENACAO'].includes(role)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }

@@ -169,6 +169,7 @@ model Student {
   id           String   @id @default(cuid())
   name         String
   enrollment   String   @unique
+  cgm          String?  @unique
   birthDate    DateTime?
   cpf          String?  @unique
   rg           String?
@@ -197,9 +198,24 @@ model Student {
   enemPerformances       StudentEnemPerformance[]
   waygroundResults       WaygroundStudentResult[]
   attendances            StudentAttendance[]
-  logs                   StudentLog[]
+  studentLogs            StudentLog[]
 
   @@map("students")
+}
+
+model StudentLog {
+  id        String   @id @default(cuid())
+  studentId String
+  userId    String
+  category  String   @default("OBSERVACAO")
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id])
+
+  @@map("student_logs")
 }
 
 model StudentGuardian {
@@ -675,23 +691,6 @@ model Message {
   replies   Message[] @relation("MessageThread")
 
   @@map("messages")
-}
-
-// ─── Student Logs ─────────────────────────────────────────────────────────────
-
-model StudentLog {
-  id        String   @id @default(cuid())
-  studentId String
-  userId    String
-  category  String   @default("OBSERVACAO")
-  content   String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  user    User    @relation(fields: [userId], references: [id])
-
-  @@map("student_logs")
 }
 
 // ─── Attendance ───────────────────────────────────────────────────────────────

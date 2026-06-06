@@ -1,7 +1,6 @@
 'use client'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useSession } from 'next-auth/react'
-import { useSearchParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -11,37 +10,17 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import {
-  Plus, Search, UserCheck, Eye, ChevronUp, ChevronDown, ChevronsUpDown,
-  Camera, X, Trash2, BookOpen, ChevronRight, Clock, Sparkles,
-} from 'lucide-react'
+import { Plus, Search, UserCheck, Eye, ChevronDown, Trash2, Sparkles, Loader2, ChevronUp } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
-import { STATUS_LABELS, ASSESSMENT_TYPE_LABELS, formatDate } from '@/lib/utils'
+import { STATUS_LABELS, formatDate } from '@/lib/utils'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-
-interface GradeRecord {
-  id: string
-  score: number | null
-  observations?: string
-  launchedAt: string
-  assessment: {
-    id: string
-    name: string
-    period?: string
-    type: string
-    maxScore: number
-    weight: number
-    date?: string
-    subject: { id: string; name: string }
-  }
-}
 
 interface Student {
   id: string
   name: string
   enrollment: string
+  cgm?: string
   birthDate?: string
   cpf?: string
   rg?: string
@@ -50,27 +29,26 @@ interface Student {
   address?: string
   city?: string
   state?: string
-  zipCode?: string
   status: string
   observations?: string
   medicalInfo?: string
-  photoUrl?: string
   classId?: string
-  class?: { id: string; name: string; gradeId?: string; grade?: { id: string; name: string } }
+  class?: { id: string; name: string; grade?: { name: string; segment?: { name: string } } }
   guardians: Guardian[]
   gradeRecords?: GradeRecord[]
-  subjectAbsences?: Record<string, { faltas: number; faltasJustificadas: number }>
+  homeworkSubmissions?: { id: string; homework: { subject: { id: string; name: string } } }[]
   _count?: { homeworkSubmissions: number; gradeRecords: number }
-  _hwTotal?: number
+  subjectAbsences?: Record<string, { faltas: number; faltasJustificadas: number }>
 }
 
 interface Guardian {
-  id?: string
-  name: string
-  relationship: string
-  phone?: string
-  email?: string
-  isPrimary: boolean
+  id: string; name: string; relationship: string; phone?: string; email?: string; isPrimary: boolean
+}
+
+interface GradeRecord {
+  id: string
+  score?: number
+  assessment: { name: string; period?: string; subject: { id: string; name: string } }
 }
 
 interface StudentLog {
@@ -81,221 +59,133 @@ interface StudentLog {
   user: { id: string; name: string; role: string }
 }
 
-const LOG_CATEGORIES: Record<string, { label: string; variant: any }> = {
-  OBSERVACAO:      { label: 'Observação',           variant: 'secondary' },
-  REUNIAO:         { label: 'Reunião com família',   variant: 'info' },
-  ADVERTENCIA:     { label: 'Advertência',           variant: 'warning' },
-  ELOGIO:          { label: 'Elogio',                variant: 'success' },
-  OCORRENCIA:      { label: 'Ocorrência disciplinar',variant: 'destructive' },
-  SUSPENSAO:       { label: 'Suspensão',             variant: 'destructive' },
-  ENCAMINHAMENTO:  { label: 'Encaminhamento',        variant: 'info' },
-  CONTATO:         { label: 'Contato com família',   variant: 'secondary' },
-  OUTRO:           { label: 'Outro',                 variant: 'secondary' },
+interface ClassOption {
+  id: string; name: string; grade?: { name: string }
 }
 
-interface ClassItem {
-  id: string
-  name: string
-  gradeId?: string
-  grade?: { id: string; name: string }
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const STATUS_OPTS = ['ATIVO', 'INATIVO', 'TRANSFERIDO', 'FORMADO', 'SUSPENSO']
+const STATUS_BADGE: Record<string, any> = {
+  ATIVO: 'success', INATIVO: 'secondary', TRANSFERIDO: 'warning', FORMADO: 'info', SUSPENSO: 'destructive'
 }
 
-type SortCol = 'name' | 'enrollment' | 'class' | 'grade' | 'status' | 'hw' | 'grades'
-type SortDir = 'asc' | 'desc'
-
-// ─── Filter persistence ───────────────────────────────────────────────────────
-
-const FILTER_KEY = 'vela_alunos_filters_v2'
-
-interface Filters { status: string; gradeId: string; classId: string; search: string }
-const DEFAULT_FILTERS: Filters = { status: '', gradeId: '', classId: '', search: '' }
-
-function loadFilters(): Filters {
-  if (typeof window === 'undefined') return DEFAULT_FILTERS
-  try {
-    const s = localStorage.getItem(FILTER_KEY)
-    if (s) return { ...DEFAULT_FILTERS, ...JSON.parse(s) }
-  } catch {}
-  return DEFAULT_FILTERS
+const LOG_CATEGORIES: Record<string, { label: string; color: string }> = {
+  OBSERVACAO:    { label: 'Observação',    color: 'bg-blue-100 text-blue-800' },
+  REUNIAO:       { label: 'Reunião',       color: 'bg-purple-100 text-purple-800' },
+  ADVERTENCIA:   { label: 'Advertência',   color: 'bg-yellow-100 text-yellow-800' },
+  SUSPENSAO:     { label: 'Suspensão',     color: 'bg-red-100 text-red-800' },
+  ELOGIO:        { label: 'Elogio',        color: 'bg-green-100 text-green-800' },
+  ENCAMINHAMENTO:{ label: 'Encaminhamento',color: 'bg-orange-100 text-orange-800' },
+  CONTATO_RESP:  { label: 'Contato c/ Resp.', color: 'bg-teal-100 text-teal-800' },
+  OCORRENCIA:    { label: 'Ocorrência',    color: 'bg-pink-100 text-pink-800' },
+  OUTRO:         { label: 'Outro',         color: 'bg-gray-100 text-gray-800' },
 }
+
+const DEFAULT_FORM = {
+  name: '', enrollment: '', cgm: '', birthDate: '', cpf: '', rg: '', email: '',
+  phone: '', address: '', city: '', state: '', zipCode: '',
+  status: 'ATIVO', observations: '', medicalInfo: '', classId: '',
+}
+
+const DEFAULT_GUARDIAN = { name: '', relationship: '', phone: '', email: '', isPrimary: false }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const defaultForm = {
-  name: '', enrollment: '', birthDate: '', cpf: '', rg: '', email: '', phone: '',
-  address: '', city: '', state: '', zipCode: '', status: 'ATIVO', observations: '',
-  medicalInfo: '', photoUrl: '', classId: '',
+function initials(name: string) {
+  return name.split(' ').filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join('')
 }
 
-const statusVariants: Record<string, any> = {
-  ATIVO: 'success', INATIVO: 'secondary', TRANSFERIDO: 'warning',
-  FORMADO: 'info', SUSPENSO: 'destructive',
+function Avatar({ name, size = 8 }: { name: string; size?: number }) {
+  const colors = ['bg-teal-500', 'bg-violet-500', 'bg-amber-500', 'bg-rose-500', 'bg-sky-500', 'bg-emerald-500']
+  const color = colors[name.charCodeAt(0) % colors.length]
+  return (
+    <div className={`flex items-center justify-center rounded-full text-white font-semibold ${color}`}
+      style={{ width: size * 4, height: size * 4, fontSize: size * 1.6 }}>
+      {initials(name)}
+    </div>
+  )
 }
 
-function getInitials(name: string) {
-  return name.trim().split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join('')
+function InfoField({ label, value }: { label: string; value?: string | null }) {
+  return (
+    <div>
+      <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">{label}</p>
+      <p className="text-sm mt-0.5">{value || '-'}</p>
+    </div>
+  )
 }
 
-function hwColor(done: number, total: number) {
-  if (total === 0) return 'text-muted-foreground'
-  const pct = done / total
-  if (pct >= 0.8) return 'text-emerald-600 dark:text-emerald-400'
-  if (pct >= 0.5) return 'text-amber-600 dark:text-amber-400'
-  return 'text-red-600 dark:text-red-400'
-}
+// ─── NotasTab ─────────────────────────────────────────────────────────────────
 
-function scoreColor(score: number, max: number) {
-  const pct = score / max
-  if (pct >= 0.7) return 'text-emerald-600 dark:text-emerald-400'
-  if (pct >= 0.5) return 'text-amber-600 dark:text-amber-400'
-  return 'text-red-600 dark:text-red-400'
-}
+function NotasTab({ student }: { student: Student }) {
+  const [open, setOpen] = useState<string | null>(null)
 
-function SortIcon({ col, active, dir }: { col: SortCol; active: SortCol; dir: SortDir }) {
-  if (col !== active) return <ChevronsUpDown className="h-3 w-3 ml-1 text-muted-foreground/50" />
-  return dir === 'asc'
-    ? <ChevronUp className="h-3 w-3 ml-1 text-foreground" />
-    : <ChevronDown className="h-3 w-3 ml-1 text-foreground" />
-}
-
-// ─── Notas Tab ────────────────────────────────────────────────────────────────
-
-function NotasTab({
-  gradeRecords,
-  subjectAbsences,
-}: {
-  gradeRecords: GradeRecord[]
-  subjectAbsences?: Record<string, { faltas: number; faltasJustificadas: number }>
-}) {
-  const [expanded, setExpanded] = useState<Set<string>>(new Set())
-
-  const toggle = (key: string) =>
-    setExpanded(prev => {
-      const next = new Set(prev)
-      if (next.has(key)) next.delete(key); else next.add(key)
-      return next
-    })
-
-  if (!gradeRecords || gradeRecords.length === 0) {
-    return <p className="text-sm text-muted-foreground pt-4">Nenhuma nota lançada ainda.</p>
+  if (!student.gradeRecords?.length) {
+    return <p className="text-sm text-muted-foreground pt-4">Nenhuma nota lançada.</p>
   }
 
-  // Group: period → subjectId → records
-  const byPeriod = new Map<string, Map<string, { name: string; records: GradeRecord[] }>>()
-  for (const r of gradeRecords) {
-    const period = r.assessment.period || 'Sem período'
-    const subId = r.assessment.subject.id
-    const subName = r.assessment.subject.name
-    if (!byPeriod.has(period)) byPeriod.set(period, new Map())
-    const subMap = byPeriod.get(period)!
-    if (!subMap.has(subId)) subMap.set(subId, { name: subName, records: [] })
-    subMap.get(subId)!.records.push(r)
+  // Group by subject
+  const bySubject: Record<string, { subjectName: string; records: GradeRecord[] }> = {}
+  for (const r of student.gradeRecords) {
+    const sid = r.assessment.subject.id
+    if (!bySubject[sid]) bySubject[sid] = { subjectName: r.assessment.subject.name, records: [] }
+    bySubject[sid].records.push(r)
   }
-
-  const periods = Array.from(byPeriod.keys()).sort((a, b) => a.localeCompare(b, 'pt-BR', { numeric: true }))
 
   return (
-    <div className="pt-4 space-y-6">
-      {periods.map(period => {
-        const subMap = byPeriod.get(period)!
-        const subjects = Array.from(subMap.entries()).sort(([, a], [, b]) => a.name.localeCompare(b.name, 'pt-BR'))
+    <div className="pt-4 space-y-2">
+      {Object.entries(bySubject).map(([sid, { subjectName, records }]) => {
+        const scores = records.filter(r => r.score != null).map(r => r.score as number)
+        const avg = scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : null
+        const abs = student.subjectAbsences?.[sid]
+        const isOpen = open === sid
 
         return (
-          <div key={period}>
-            <div className="flex items-center gap-2 mb-3">
-              <BookOpen className="h-4 w-4 text-muted-foreground" />
-              <h4 className="text-sm font-semibold">{period}</h4>
-            </div>
-
-            <div className="space-y-2">
-              {subjects.map(([subId, { name: subName, records }]) => {
-                // Sort records by date, then by name
-                const sorted = [...records].sort((a, b) => {
-                  const da = a.assessment.date ?? a.launchedAt
-                  const db = b.assessment.date ?? b.launchedAt
-                  return da < db ? -1 : da > db ? 1 : 0
-                })
-
-                const scored = sorted.filter(r => r.score !== null)
-                const avg = scored.length > 0
-                  ? scored.reduce((s, r) => s + (r.score! / r.assessment.maxScore) * 10 * r.assessment.weight, 0) /
-                    scored.reduce((s, r) => s + r.assessment.weight, 0)
-                  : null
-
-                const cardKey = `${period}::${subId}`
-                const isOpen = expanded.has(cardKey)
-                const abs = subjectAbsences?.[subId]
-
-                return (
-                  <Card key={subId} className="overflow-hidden">
-                    {/* Clickable header */}
-                    <button
-                      className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-muted/40 transition-colors text-left"
-                      onClick={() => toggle(cardKey)}
-                    >
-                      <div className="flex items-center gap-2">
-                        {isOpen
-                          ? <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
-                          : <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
-                        }
-                        <span className="text-sm font-medium">{subName}</span>
-                      </div>
-                      {avg !== null && (
-                        <span className={`text-sm font-bold tabular-nums ${scoreColor(avg, 10)}`}>
-                          {avg.toFixed(1)}
-                        </span>
-                      )}
-                    </button>
-
-                    {/* Expanded detail */}
-                    {isOpen && (
-                      <div className="border-t px-3 pb-3 pt-2 space-y-1.5 bg-muted/10">
-                        {sorted.map((r, idx) => (
-                          <div key={r.id} className="flex items-center justify-between text-xs">
-                            <div className="flex items-center gap-2 min-w-0">
-                              <span className="font-semibold text-muted-foreground w-6 shrink-0">P{idx + 1}</span>
-                              <span className="text-muted-foreground truncate">{r.assessment.name}</span>
-                              <span className="text-muted-foreground/60 shrink-0">
-                                {ASSESSMENT_TYPE_LABELS[r.assessment.type] || r.assessment.type}
-                              </span>
-                            </div>
-                            {r.score !== null ? (
-                              <span className={`font-semibold tabular-nums shrink-0 ${scoreColor(r.score, r.assessment.maxScore)}`}>
-                                {r.score.toFixed(1)} / {r.assessment.maxScore.toFixed(0)}
-                              </span>
-                            ) : (
-                              <span className="text-muted-foreground/50 shrink-0">—</span>
-                            )}
-                          </div>
-                        ))}
-
-                        {/* Average row */}
-                        <div className="border-t pt-1.5 flex items-center justify-between text-xs">
-                          <span className="text-muted-foreground">Média ponderada</span>
-                          {avg !== null ? (
-                            <span className={`font-bold ${scoreColor(avg, 10)}`}>{avg.toFixed(1)}</span>
-                          ) : (
-                            <span className="text-muted-foreground/50">—</span>
-                          )}
-                        </div>
-
-                        {/* Absences row */}
-                        {abs !== undefined && (
-                          <div className="flex items-center justify-between text-xs text-muted-foreground">
-                            <span>Faltas neste componente</span>
-                            <span className={(abs.faltas + abs.faltasJustificadas) > 0 ? 'text-amber-600 dark:text-amber-400 font-medium' : ''}>
-                              {abs.faltas > 0 || abs.faltasJustificadas > 0
-                                ? `${abs.faltas} falta${abs.faltas !== 1 ? 's' : ''}${abs.faltasJustificadas > 0 ? ` · ${abs.faltasJustificadas} justif.` : ''}`
-                                : 'Sem faltas'}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </Card>
-                )
-              })}
-            </div>
+          <div key={sid}>
+            <button
+              type="button"
+              onClick={() => setOpen(isOpen ? null : sid)}
+              className="w-full flex items-center justify-between p-3 rounded-lg border bg-muted/30 hover:bg-muted/50 transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <span className="font-medium text-sm">{subjectName}</span>
+                {abs && (abs.faltas > 0 || abs.faltasJustificadas > 0) && (
+                  <span className="text-xs">
+                    {abs.faltas > 0 && <span className="text-red-600">{abs.faltas}F</span>}
+                    {abs.faltas > 0 && abs.faltasJustificadas > 0 && ' · '}
+                    {abs.faltasJustificadas > 0 && <span className="text-amber-600">{abs.faltasJustificadas}FJ</span>}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                {avg != null && (
+                  <Badge variant={avg >= 6 ? 'success' : avg >= 5 ? 'warning' : 'destructive'}>
+                    Média: {avg.toFixed(1)}
+                  </Badge>
+                )}
+                {isOpen ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+              </div>
+            </button>
+            {isOpen && (
+              <div className="border border-t-0 rounded-b-lg p-3 space-y-1.5">
+                {records.map(r => (
+                  <div key={r.id} className="flex justify-between items-center text-sm py-1">
+                    <span className="text-muted-foreground">{r.assessment.name}</span>
+                    <span className={`font-medium ${r.score == null ? 'text-muted-foreground' : r.score >= 6 ? 'text-green-700' : 'text-red-600'}`}>
+                      {r.score != null ? r.score.toFixed(1) : '—'}
+                    </span>
+                  </div>
+                ))}
+                {abs && (
+                  <div className="flex gap-4 pt-2 border-t text-xs text-muted-foreground">
+                    {abs.faltas > 0 && <span className="text-red-600">Faltas: {abs.faltas}</span>}
+                    {abs.faltasJustificadas > 0 && <span className="text-amber-600">Faltas justificadas: {abs.faltasJustificadas}</span>}
+                    {abs.faltas === 0 && abs.faltasJustificadas === 0 && <span>Sem faltas registradas</span>}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )
       })}
@@ -303,155 +193,138 @@ function NotasTab({
   )
 }
 
-// ─── Ficha Disciplinar Tab ────────────────────────────────────────────────────
+// ─── FichaDisciplinarTab ──────────────────────────────────────────────────────
 
-function HistoricoTab({ studentId, currentUserId }: { studentId: string; currentUserId?: string }) {
+function FichaDisciplinarTab({ studentId }: { studentId: string }) {
+  const { data: session } = useSession()
   const [logs, setLogs] = useState<StudentLog[]>([])
-  const [loading, setLoading] = useState(true)
+  const [category, setCategory] = useState('OBSERVACAO')
+  const [content, setContent] = useState('')
   const [saving, setSaving] = useState(false)
   const [summarizing, setSummarizing] = useState(false)
   const [summary, setSummary] = useState<string | null>(null)
-  const [form, setForm] = useState({ category: 'OBSERVACAO', content: '' })
   const { toast } = useToast()
 
-  useEffect(() => {
-    setLoading(true)
-    fetch(`/api/alunos/${studentId}/logs`)
-      .then(r => r.json())
-      .then(data => setLogs(Array.isArray(data) ? data : []))
-      .finally(() => setLoading(false))
+  const fetchLogs = useCallback(async () => {
+    const res = await fetch(`/api/alunos/${studentId}/logs`)
+    if (res.ok) setLogs(await res.json())
   }, [studentId])
 
-  const handleSave = async () => {
-    if (!form.content.trim()) return
+  useEffect(() => { fetchLogs() }, [fetchLogs])
+
+  const handleAdd = async () => {
+    if (!content.trim()) return
     setSaving(true)
-    try {
-      const res = await fetch(`/api/alunos/${studentId}/logs`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
-      })
-      if (res.ok) {
-        const created = await res.json()
-        setLogs(prev => [created, ...prev])
-        setForm({ category: 'OBSERVACAO', content: '' })
-        toast({ title: 'Registro salvo!' })
-      } else {
-        toast({ title: 'Erro ao salvar', variant: 'destructive' })
-      }
-    } finally {
-      setSaving(false)
+    const res = await fetch(`/api/alunos/${studentId}/logs`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ category, content }),
+    })
+    if (res.ok) {
+      setContent('')
+      fetchLogs()
+    } else {
+      toast({ title: 'Erro ao salvar', variant: 'destructive' })
     }
+    setSaving(false)
   }
 
   const handleDelete = async (logId: string) => {
     const res = await fetch(`/api/alunos/${studentId}/logs?logId=${logId}`, { method: 'DELETE' })
-    if (res.ok) {
-      setLogs(prev => prev.filter(l => l.id !== logId))
-      toast({ title: 'Registro removido' })
-    }
+    if (res.ok) fetchLogs()
+    else toast({ title: 'Erro ao excluir', variant: 'destructive' })
   }
 
-  const handleSummarize = async () => {
+  const handleSummary = async () => {
     setSummarizing(true)
     setSummary(null)
-    try {
-      const res = await fetch(`/api/alunos/${studentId}/ai-summary`, { method: 'POST' })
-      if (res.ok) {
-        const data = await res.json()
-        setSummary(data.summary)
-      } else {
-        toast({ title: 'Erro ao gerar resumo', variant: 'destructive' })
-      }
-    } finally {
-      setSummarizing(false)
-    }
+    const res = await fetch(`/api/alunos/${studentId}/ai-summary`, { method: 'POST' })
+    const data = await res.json()
+    setSummarizing(false)
+    if (res.ok) setSummary(data.summary)
+    else toast({ title: data.error || 'Erro ao gerar resumo', variant: 'destructive' })
   }
+
+  const currentUserId = (session?.user as any)?.id
+  const currentRole = (session?.user as any)?.role
 
   return (
     <div className="pt-4 space-y-4">
-      {/* Entry form */}
-      <Card>
-        <CardContent className="p-4 space-y-3">
+      {/* Add log */}
+      <div className="space-y-2 border rounded-lg p-3 bg-muted/20">
+        <div className="flex gap-2">
           <select
-            className="h-9 w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm"
-            value={form.category}
-            onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
+            className="flex h-9 rounded-md border border-input bg-background px-2 py-1 text-sm"
+            value={category}
+            onChange={e => setCategory(e.target.value)}
           >
-            {Object.entries(LOG_CATEGORIES).map(([k, { label }]) => (
-              <option key={k} value={k}>{label}</option>
+            {Object.entries(LOG_CATEGORIES).map(([k, v]) => (
+              <option key={k} value={k}>{v.label}</option>
             ))}
           </select>
-          <Textarea
-            rows={3}
-            placeholder="Descreva a reunião, ocorrência, observação, elogio..."
-            value={form.content}
-            onChange={e => setForm(f => ({ ...f, content: e.target.value }))}
-          />
-          <div className="flex items-center justify-between">
-            <Button
-              size="sm" variant="outline"
-              onClick={handleSummarize}
-              disabled={summarizing || logs.length === 0}
-              className="gap-1.5 text-muted-foreground"
-            >
-              <Sparkles className="h-3.5 w-3.5" />
-              {summarizing ? 'Gerando resumo...' : 'Resumo com IA'}
-            </Button>
-            <Button size="sm" onClick={handleSave} disabled={saving || !form.content.trim()}>
-              {saving ? 'Salvando...' : 'Registrar'}
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+        </div>
+        <Textarea
+          placeholder="Descreva a ocorrência, reunião, elogio ou observação..."
+          rows={3}
+          value={content}
+          onChange={e => setContent(e.target.value)}
+        />
+        <div className="flex justify-between items-center">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleSummary}
+            disabled={summarizing || logs.length === 0}
+            className="gap-1.5 text-violet-700 border-violet-300 hover:bg-violet-50"
+          >
+            {summarizing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+            Resumo IA
+          </Button>
+          <Button size="sm" onClick={handleAdd} disabled={saving || !content.trim()}>
+            {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : null}
+            Salvar registro
+          </Button>
+        </div>
+      </div>
 
-      {/* AI summary */}
+      {/* AI Summary */}
       {summary && (
-        <Card className="border-dashed border-teal/50 bg-teal/5">
-          <CardContent className="p-4 space-y-2">
-            <div className="flex items-center justify-between">
-              <p className="text-xs font-semibold flex items-center gap-1.5 text-teal-700 dark:text-teal-300">
-                <Sparkles className="h-3.5 w-3.5" /> Resumo gerado pela IA
-              </p>
-              <button onClick={() => setSummary(null)} className="text-muted-foreground hover:text-foreground">
-                <X className="h-3.5 w-3.5" />
-              </button>
+        <Card className="border-violet-200 bg-violet-50">
+          <CardContent className="p-3 space-y-1">
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-violet-700">
+              <Sparkles className="h-3.5 w-3.5" /> Resumo da IA
             </div>
-            <p className="text-sm whitespace-pre-wrap leading-relaxed">{summary}</p>
+            <p className="text-sm whitespace-pre-wrap">{summary}</p>
           </CardContent>
         </Card>
       )}
 
-      {/* History */}
-      {loading ? (
-        <p className="text-sm text-muted-foreground text-center py-6">Carregando...</p>
-      ) : logs.length === 0 ? (
-        <p className="text-sm text-muted-foreground text-center py-6">Nenhum registro ainda.</p>
+      {/* Log list */}
+      {logs.length === 0 ? (
+        <p className="text-sm text-muted-foreground">Nenhum registro ainda.</p>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-2">
           {logs.map(log => {
-            const cat = LOG_CATEGORIES[log.category] ?? { label: log.category, variant: 'secondary' }
+            const cat = LOG_CATEGORIES[log.category] || LOG_CATEGORIES.OUTRO
+            const canDelete = log.user.id === currentUserId || ['ADMIN', 'COORDENACAO'].includes(currentRole || '')
             return (
-              <div key={log.id} className="rounded-lg border p-3 space-y-2">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge variant={cat.variant}>{cat.label}</Badge>
-                    <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                      <Clock className="h-3 w-3" />
-                      {log.user.name} · {new Date(log.createdAt).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+              <div key={log.id} className="border rounded-lg p-3 space-y-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${cat.color}`}>{cat.label}</span>
+                    <span className="text-xs text-muted-foreground">{log.user.name}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {new Date(log.createdAt).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                     </span>
                   </div>
-                  {log.user.id === currentUserId && (
-                    <button
-                      onClick={() => handleDelete(log.id)}
-                      className="text-muted-foreground hover:text-destructive transition-colors shrink-0"
-                      title="Remover registro"
-                    >
+                  {canDelete && (
+                    <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-red-500 shrink-0"
+                      onClick={() => handleDelete(log.id)}>
                       <Trash2 className="h-3.5 w-3.5" />
-                    </button>
+                    </Button>
                   )}
                 </div>
-                <p className="text-sm whitespace-pre-wrap leading-relaxed">{log.content}</p>
+                <p className="text-sm">{log.content}</p>
               </div>
             )
           })}
@@ -461,41 +334,19 @@ function HistoricoTab({ studentId, currentUserId }: { studentId: string; current
   )
 }
 
-// ─── Main page ────────────────────────────────────────────────────────────────
+// ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function AlunosPage() {
-  const { data: session } = useSession()
-  const currentUserId = (session?.user as any)?.id as string | undefined
-  const searchParams = useSearchParams()
   const [students, setStudents] = useState<Student[]>([])
-  const [classes, setClasses] = useState<ClassItem[]>([])
-  const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS)
-  const [sortCol, setSortCol] = useState<SortCol>('name')
-  const [sortDir, setSortDir] = useState<SortDir>('asc')
+  const [classes, setClasses] = useState<ClassOption[]>([])
+  const [search, setSearch] = useState('')
+  const [filterStatus, setFilterStatus] = useState('')
   const [open, setOpen] = useState(false)
   const [viewOpen, setViewOpen] = useState(false)
   const [selected, setSelected] = useState<Student | null>(null)
-  const [form, setForm] = useState(defaultForm)
-  const [guardians, setGuardians] = useState<Guardian[]>([])
-  const [photoFileName, setPhotoFileName] = useState('')
-  const fileRef = useRef<HTMLInputElement>(null)
+  const [form, setForm] = useState(DEFAULT_FORM)
+  const [guardians, setGuardians] = useState([{ ...DEFAULT_GUARDIAN }])
   const { toast } = useToast()
-
-  // Load saved filters after hydration (avoid SSR mismatch)
-  useEffect(() => {
-    const saved = loadFilters()
-    const urlFilter = searchParams.get('filter')
-    if (urlFilter === 'sem-tarefas') {
-      setFilters({ ...saved, status: 'ATIVO' })
-    } else {
-      setFilters(saved)
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  useEffect(() => {
-    try { localStorage.setItem(FILTER_KEY, JSON.stringify(filters)) } catch {}
-  }, [filters])
 
   useEffect(() => { fetchStudents(); fetchClasses() }, [])
 
@@ -515,128 +366,84 @@ export default function AlunosPage() {
   }
 
   const handleSave = async () => {
+    const payload = {
+      ...form,
+      cgm: form.cgm || undefined,
+      cpf: form.cpf || undefined,
+      classId: form.classId || undefined,
+      birthDate: form.birthDate || undefined,
+      guardians: guardians.filter(g => g.name.trim()),
+    }
     const res = await fetch('/api/alunos', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...form, guardians }),
+      body: JSON.stringify(payload),
     })
     if (res.ok) {
       toast({ title: 'Aluno cadastrado!' })
-      setOpen(false); setForm(defaultForm); setGuardians([]); setPhotoFileName('')
+      setOpen(false)
+      setForm(DEFAULT_FORM)
+      setGuardians([{ ...DEFAULT_GUARDIAN }])
       fetchStudents()
     } else {
-      toast({ title: 'Erro ao salvar', variant: 'destructive' })
+      const data = await res.json().catch(() => ({}))
+      toast({ title: data.error || 'Erro ao salvar', variant: 'destructive' })
     }
   }
 
   const openView = async (s: Student) => {
-    await fetchStudent(s.id)
+    setSelected(s)
     setViewOpen(true)
-  }
-
-  const setFilter = (key: keyof Filters, value: string) =>
-    setFilters(f => {
-      const next = { ...f, [key]: value }
-      if (key === 'gradeId') next.classId = ''
-      return next
-    })
-
-  const clearFilters = () => setFilters(DEFAULT_FILTERS)
-  const hasActiveFilters = Object.values(filters).some(v => v !== '')
-
-  const grades = Array.from(new Map(
-    classes.filter(c => c.grade).map(c => [c.grade!.id, c.grade!])
-  ).values())
-
-  const filteredClasses = filters.gradeId
-    ? classes.filter(c => c.gradeId === filters.gradeId)
-    : classes
-
-  const toggleSort = (col: SortCol) => {
-    if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
-    else { setSortCol(col); setSortDir('asc') }
+    const res = await fetch(`/api/alunos/${s.id}`)
+    if (res.ok) setSelected(await res.json())
   }
 
   const filtered = students.filter(s => {
-    if (filters.search && !s.name.toLowerCase().includes(filters.search.toLowerCase()) && !s.enrollment.includes(filters.search)) return false
-    if (filters.status && s.status !== filters.status) return false
-    if (filters.gradeId && s.class?.grade?.id !== filters.gradeId) return false
-    if (filters.classId && s.classId !== filters.classId) return false
-    return true
+    const matchSearch = !search ||
+      s.name.toLowerCase().includes(search.toLowerCase()) ||
+      s.enrollment.includes(search) ||
+      (s.cgm || '').includes(search)
+    const matchStatus = !filterStatus || s.status === filterStatus
+    return matchSearch && matchStatus
   })
 
-  const sorted = [...filtered].sort((a, b) => {
-    let av: string | number = '', bv: string | number = ''
-    if (sortCol === 'name') { av = a.name; bv = b.name }
-    else if (sortCol === 'enrollment') { av = a.enrollment; bv = b.enrollment }
-    else if (sortCol === 'class') { av = a.class?.name || ''; bv = b.class?.name || '' }
-    else if (sortCol === 'grade') { av = a.class?.grade?.name || ''; bv = b.class?.grade?.name || '' }
-    else if (sortCol === 'status') { av = a.status; bv = b.status }
-    else if (sortCol === 'hw') { av = a._count?.homeworkSubmissions || 0; bv = b._count?.homeworkSubmissions || 0 }
-    else if (sortCol === 'grades') { av = a._count?.gradeRecords || 0; bv = b._count?.gradeRecords || 0 }
-    const cmp = typeof av === 'number' ? av - (bv as number) : String(av).localeCompare(String(bv), 'pt-BR')
-    return sortDir === 'asc' ? cmp : -cmp
-  })
-
-  const addGuardian = () => setGuardians(g => [...g, { name: '', relationship: '', phone: '', email: '', isPrimary: g.length === 0 }])
-  const removeGuardian = (i: number) => setGuardians(g => g.filter((_, idx) => idx !== i))
-  const updateGuardian = (i: number, field: keyof Guardian, value: any) =>
+  const addGuardian = () => setGuardians(g => [...g, { ...DEFAULT_GUARDIAN }])
+  const updateGuardian = (i: number, field: string, value: string | boolean) =>
     setGuardians(g => g.map((item, idx) => idx === i ? { ...item, [field]: value } : item))
-
-  const SortTH = ({ col, children }: { col: SortCol; children: React.ReactNode }) => (
-    <TableHead className="cursor-pointer select-none" onClick={() => toggleSort(col)}>
-      <span className="flex items-center">
-        {children}
-        <SortIcon col={col} active={sortCol} dir={sortDir} />
-      </span>
-    </TableHead>
-  )
+  const removeGuardian = (i: number) => setGuardians(g => g.filter((_, idx) => idx !== i))
 
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <UserCheck className="h-6 w-6" /> Alunos
-          </h1>
+          <h1 className="text-2xl font-bold flex items-center gap-2"><UserCheck className="h-6 w-6" /> Alunos</h1>
           <p className="text-muted-foreground text-sm">{students.length} alunos cadastrados</p>
         </div>
-        <Button onClick={() => { setForm(defaultForm); setGuardians([]); setPhotoFileName(''); setOpen(true) }}>
+        <Button onClick={() => { setForm(DEFAULT_FORM); setGuardians([{ ...DEFAULT_GUARDIAN }]); setOpen(true) }}>
           <Plus className="h-4 w-4 mr-2" /> Novo Aluno
         </Button>
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-3 items-center">
-        <div className="relative flex-1 min-w-48 max-w-xs">
+      <div className="flex gap-3 flex-wrap">
+        <div className="relative flex-1 min-w-[200px] max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Buscar por nome ou matrícula..." className="pl-9"
-            value={filters.search} onChange={e => setFilter('search', e.target.value)} />
+          <Input placeholder="Buscar por nome, matrícula ou CGM..." className="pl-9" value={search} onChange={e => setSearch(e.target.value)} />
         </div>
-        <select className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm min-w-36"
-          value={filters.status} onChange={e => setFilter('status', e.target.value)}>
+        <select
+          className="flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+          value={filterStatus}
+          onChange={e => setFilterStatus(e.target.value)}
+        >
           <option value="">Todos os status</option>
-          {Object.entries(STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+          {STATUS_OPTS.map(s => <option key={s} value={s}>{STATUS_LABELS[s] || s}</option>)}
         </select>
-        <select className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm min-w-36"
-          value={filters.gradeId} onChange={e => setFilter('gradeId', e.target.value)}>
-          <option value="">Todas as séries</option>
-          {grades.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
-        </select>
-        <select className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm min-w-36"
-          value={filters.classId} onChange={e => setFilter('classId', e.target.value)}>
-          <option value="">Todas as turmas</option>
-          {filteredClasses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
-        {hasActiveFilters && (
-          <Button variant="ghost" size="sm" onClick={clearFilters} className="gap-1 text-muted-foreground">
-            <X className="h-3.5 w-3.5" /> Limpar
+        {(search || filterStatus) && (
+          <Button variant="ghost" size="sm" onClick={() => { setSearch(''); setFilterStatus('') }}>
+            Limpar
           </Button>
         )}
-        <span className="text-sm text-muted-foreground ml-auto">
-          {sorted.length} {sorted.length === 1 ? 'aluno' : 'alunos'}
-        </span>
       </div>
 
       {/* Table */}
@@ -645,66 +452,44 @@ export default function AlunosPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-10" />
-                <SortTH col="name">Nome</SortTH>
-                <SortTH col="enrollment">Matrícula</SortTH>
-                <SortTH col="grade">Série</SortTH>
-                <SortTH col="class">Turma</SortTH>
-                <SortTH col="status">Status</SortTH>
-                <SortTH col="hw">Tarefas</SortTH>
-                <SortTH col="grades">Notas</SortTH>
+                <TableHead>Aluno</TableHead>
+                <TableHead>Matrícula</TableHead>
+                <TableHead>CGM</TableHead>
+                <TableHead>Turma</TableHead>
+                <TableHead>Status</TableHead>
                 <TableHead className="w-16">Ações</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {sorted.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
-                    Nenhum aluno encontrado.
+              {filtered.length === 0 ? (
+                <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Nenhum aluno encontrado.</TableCell></TableRow>
+              ) : filtered.map(s => (
+                <TableRow key={s.id}>
+                  <TableCell>
+                    <div className="flex items-center gap-2.5">
+                      <Avatar name={s.name} size={8} />
+                      <span className="font-medium">{s.name}</span>
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-sm font-mono">{s.enrollment}</TableCell>
+                  <TableCell className="text-sm font-mono text-muted-foreground">{s.cgm || '-'}</TableCell>
+                  <TableCell>{s.class ? `${s.class.grade?.name || ''} ${s.class.name}`.trim() : '-'}</TableCell>
+                  <TableCell>
+                    <Badge variant={STATUS_BADGE[s.status] || 'secondary'}>{STATUS_LABELS[s.status] || s.status}</Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Button variant="ghost" size="icon" onClick={() => openView(s)}>
+                      <Eye className="h-4 w-4" />
+                    </Button>
                   </TableCell>
                 </TableRow>
-              ) : sorted.map(s => {
-                const hwDone = s._count?.homeworkSubmissions || 0
-                const hwTotal = (s as any)._hwTotal ?? 0
-                return (
-                  <TableRow key={s.id}>
-                    <TableCell>
-                      <Avatar className="h-8 w-8">
-                        {s.photoUrl && <AvatarImage src={s.photoUrl} alt={s.name} />}
-                        <AvatarFallback className="text-xs bg-teal/20 text-teal-700 dark:text-teal-300">
-                          {getInitials(s.name)}
-                        </AvatarFallback>
-                      </Avatar>
-                    </TableCell>
-                    <TableCell className="font-medium">{s.name}</TableCell>
-                    <TableCell className="text-sm font-mono">{s.enrollment}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{s.class?.grade?.name || '-'}</TableCell>
-                    <TableCell>{s.class?.name || '-'}</TableCell>
-                    <TableCell>
-                      <Badge variant={statusVariants[s.status] || 'secondary'}>
-                        {STATUS_LABELS[s.status] || s.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <span className={`text-sm font-medium ${hwColor(hwDone, hwTotal)}`}>
-                        {hwDone}/{hwTotal}
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-sm">{s._count?.gradeRecords || 0}</TableCell>
-                    <TableCell>
-                      <Button variant="ghost" size="icon" onClick={() => openView(s)} title="Visualizar ficha">
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                )
-              })}
+              ))}
             </TableBody>
           </Table>
         </CardContent>
       </Card>
 
-      {/* ── New Student Dialog ─────────────────────────────────────────────── */}
+      {/* New Student Dialog */}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Cadastrar Aluno</DialogTitle></DialogHeader>
@@ -715,122 +500,143 @@ export default function AlunosPage() {
               <TabsTrigger value="responsaveis" className="flex-1">Responsáveis</TabsTrigger>
             </TabsList>
 
+            {/* Personal */}
             <TabsContent value="pessoal" className="space-y-4 pt-4">
-              <div className="flex items-center gap-4">
-                <Avatar className="h-20 w-20">
-                  <AvatarFallback className="text-2xl bg-muted">
-                    {form.name ? getInitials(form.name) : <Camera className="h-8 w-8 text-muted-foreground" />}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="space-y-1">
-                  <input ref={fileRef} type="file" accept="image/*" className="hidden"
-                    onChange={e => { const f = e.target.files?.[0]; if (f) setPhotoFileName(f.name) }} />
-                  <Button type="button" variant="outline" size="sm" onClick={() => fileRef.current?.click()} className="gap-2">
-                    <Camera className="h-4 w-4" />
-                    {photoFileName ? 'Trocar foto' : 'Adicionar foto'}
-                  </Button>
-                  {photoFileName && (
-                    <p className="text-xs text-muted-foreground flex items-center gap-1">
-                      {photoFileName}
-                      <button onClick={() => { setPhotoFileName(''); if (fileRef.current) fileRef.current.value = '' }} className="ml-1 hover:text-destructive">
-                        <X className="h-3 w-3" />
-                      </button>
-                    </p>
-                  )}
-                  <p className="text-xs text-muted-foreground">JPG, PNG até 5 MB</p>
-                </div>
-              </div>
               <div className="space-y-2">
                 <Label>Nome completo *</Label>
                 <Input placeholder="Nome do aluno" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
               </div>
               <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2"><Label>CPF</Label>
-                  <Input placeholder="000.000.000-00" value={form.cpf} onChange={e => setForm({ ...form, cpf: e.target.value })} /></div>
-                <div className="space-y-2"><Label>RG</Label>
-                  <Input value={form.rg} onChange={e => setForm({ ...form, rg: e.target.value })} /></div>
+                <div className="space-y-2">
+                  <Label>CPF</Label>
+                  <Input placeholder="000.000.000-00" value={form.cpf} onChange={e => setForm({ ...form, cpf: e.target.value })} />
+                </div>
+                <div className="space-y-2">
+                  <Label>RG</Label>
+                  <Input placeholder="RG" value={form.rg} onChange={e => setForm({ ...form, rg: e.target.value })} />
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2"><Label>Data de nascimento</Label>
-                  <Input type="date" value={form.birthDate} onChange={e => setForm({ ...form, birthDate: e.target.value })} /></div>
-                <div className="space-y-2"><Label>Telefone</Label>
-                  <Input placeholder="(11) 99999-9999" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} /></div>
+                <div className="space-y-2">
+                  <Label>Data de nascimento</Label>
+                  <Input type="date" value={form.birthDate} onChange={e => setForm({ ...form, birthDate: e.target.value })} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Telefone</Label>
+                  <Input placeholder="(11) 99999-9999" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} />
+                </div>
               </div>
-              <div className="space-y-2"><Label>E-mail</Label>
-                <Input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} /></div>
-              <div className="space-y-2"><Label>Endereço</Label>
-                <Input placeholder="Rua, número, bairro" value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} /></div>
+              <div className="space-y-2">
+                <Label>E-mail</Label>
+                <Input placeholder="aluno@email.com" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
+              </div>
+              <div className="space-y-2">
+                <Label>Endereço</Label>
+                <Input placeholder="Rua, número, bairro" value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} />
+              </div>
               <div className="grid grid-cols-3 gap-4">
-                <div className="space-y-2 col-span-2"><Label>Cidade</Label>
-                  <Input value={form.city} onChange={e => setForm({ ...form, city: e.target.value })} /></div>
-                <div className="space-y-2"><Label>Estado</Label>
-                  <Input placeholder="SP" maxLength={2} value={form.state} onChange={e => setForm({ ...form, state: e.target.value })} /></div>
+                <div className="space-y-2 col-span-2">
+                  <Label>Cidade</Label>
+                  <Input value={form.city} onChange={e => setForm({ ...form, city: e.target.value })} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Estado</Label>
+                  <Input placeholder="SP" maxLength={2} value={form.state} onChange={e => setForm({ ...form, state: e.target.value })} />
+                </div>
               </div>
             </TabsContent>
 
+            {/* Academic */}
             <TabsContent value="academico" className="space-y-4 pt-4">
-              <div className="space-y-2"><Label>Matrícula *</Label>
-                <Input placeholder="2024-001" value={form.enrollment} onChange={e => setForm({ ...form, enrollment: e.target.value })} /></div>
-              <div className="space-y-2">
-                <Label>Turma</Label>
-                <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  value={form.classId} onChange={e => setForm({ ...form, classId: e.target.value })}>
-                  <option value="">Selecionar turma...</option>
-                  {classes.map(c => (
-                    <option key={c.id} value={c.id}>{c.name}{c.grade ? ` — ${c.grade.name}` : ''}</option>
-                  ))}
-                </select>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Matrícula *</Label>
+                  <Input placeholder="2024-001" value={form.enrollment} onChange={e => setForm({ ...form, enrollment: e.target.value })} />
+                </div>
+                <div className="space-y-2">
+                  <Label>CGM</Label>
+                  <Input placeholder="CGM do aluno" value={form.cgm} onChange={e => setForm({ ...form, cgm: e.target.value })} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Status</Label>
+                  <select
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    value={form.status}
+                    onChange={e => setForm({ ...form, status: e.target.value })}
+                  >
+                    {STATUS_OPTS.map(s => <option key={s} value={s}>{STATUS_LABELS[s] || s}</option>)}
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Turma</Label>
+                  <select
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    value={form.classId}
+                    onChange={e => setForm({ ...form, classId: e.target.value })}
+                  >
+                    <option value="">Sem turma</option>
+                    {classes.map(c => (
+                      <option key={c.id} value={c.id}>
+                        {c.grade?.name ? `${c.grade.name} — ` : ''}{c.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
               <div className="space-y-2">
-                <Label>Status</Label>
-                <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  value={form.status} onChange={e => setForm({ ...form, status: e.target.value })}>
-                  {Object.entries(STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                </select>
+                <Label>Observações pedagógicas</Label>
+                <Textarea rows={3} value={form.observations} onChange={e => setForm({ ...form, observations: e.target.value })} />
               </div>
-              <div className="space-y-2"><Label>Observações pedagógicas</Label>
-                <Textarea rows={3} value={form.observations} onChange={e => setForm({ ...form, observations: e.target.value })} /></div>
-              <div className="space-y-2"><Label>Informações de saúde</Label>
-                <Textarea rows={2} placeholder="Alergias, condições, medicamentos..." value={form.medicalInfo} onChange={e => setForm({ ...form, medicalInfo: e.target.value })} /></div>
+              <div className="space-y-2">
+                <Label>Informações de saúde</Label>
+                <Textarea rows={2} placeholder="Alergias, condições, medicamentos..." value={form.medicalInfo} onChange={e => setForm({ ...form, medicalInfo: e.target.value })} />
+              </div>
             </TabsContent>
 
-            <TabsContent value="responsaveis" className="pt-4 space-y-4">
-              {guardians.length === 0
-                ? <p className="text-sm text-muted-foreground">Nenhum responsável adicionado.</p>
-                : guardians.map((g, i) => (
-                  <Card key={i}>
-                    <CardContent className="p-4 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium">Responsável {i + 1}</span>
-                        <div className="flex items-center gap-2">
-                          <label className="flex items-center gap-1.5 text-xs cursor-pointer">
-                            <input type="checkbox" checked={g.isPrimary} onChange={e => updateGuardian(i, 'isPrimary', e.target.checked)} />
-                            Principal
-                          </label>
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => removeGuardian(i)}>
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="space-y-1"><Label className="text-xs">Nome *</Label>
-                          <Input className="h-8" value={g.name} onChange={e => updateGuardian(i, 'name', e.target.value)} /></div>
-                        <div className="space-y-1"><Label className="text-xs">Parentesco</Label>
-                          <Input className="h-8" placeholder="Mãe, Pai..." value={g.relationship} onChange={e => updateGuardian(i, 'relationship', e.target.value)} /></div>
-                        <div className="space-y-1"><Label className="text-xs">Telefone</Label>
-                          <Input className="h-8" value={g.phone || ''} onChange={e => updateGuardian(i, 'phone', e.target.value)} /></div>
-                        <div className="space-y-1"><Label className="text-xs">E-mail</Label>
-                          <Input className="h-8" type="email" value={g.email || ''} onChange={e => updateGuardian(i, 'email', e.target.value)} /></div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))
-              }
-              <Button variant="outline" size="sm" onClick={addGuardian} className="gap-2">
-                <Plus className="h-4 w-4" /> Adicionar responsável
+            {/* Guardians */}
+            <TabsContent value="responsaveis" className="space-y-4 pt-4">
+              {guardians.map((g, i) => (
+                <div key={i} className="border rounded-lg p-3 space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium">Responsável {i + 1}</span>
+                    {i > 0 && (
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => removeGuardian(i)}>
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Nome</Label>
+                      <Input placeholder="Nome completo" value={g.name} onChange={e => updateGuardian(i, 'name', e.target.value)} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Parentesco</Label>
+                      <Input placeholder="Pai, Mãe, Avó..." value={g.relationship} onChange={e => updateGuardian(i, 'relationship', e.target.value)} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Telefone</Label>
+                      <Input placeholder="(11) 99999-9999" value={g.phone} onChange={e => updateGuardian(i, 'phone', e.target.value)} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">E-mail</Label>
+                      <Input placeholder="email@exemplo.com" value={g.email} onChange={e => updateGuardian(i, 'email', e.target.value)} />
+                    </div>
+                  </div>
+                  <label className="flex items-center gap-2 text-sm cursor-pointer">
+                    <input type="checkbox" checked={g.isPrimary} onChange={e => updateGuardian(i, 'isPrimary', e.target.checked)} />
+                    Responsável principal
+                  </label>
+                </div>
+              ))}
+              <Button variant="outline" size="sm" onClick={addGuardian} className="w-full">
+                <Plus className="h-3.5 w-3.5 mr-1" /> Adicionar responsável
               </Button>
             </TabsContent>
           </Tabs>
+
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
             <Button onClick={handleSave} disabled={!form.name || !form.enrollment}>Salvar</Button>
@@ -838,25 +644,20 @@ export default function AlunosPage() {
         </DialogContent>
       </Dialog>
 
-      {/* ── View Student Dialog ────────────────────────────────────────────── */}
+      {/* View Student Dialog */}
       <Dialog open={viewOpen} onOpenChange={setViewOpen}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           {selected && (
             <>
               <DialogHeader>
                 <div className="flex items-center gap-4">
-                  <Avatar className="h-16 w-16">
-                    {selected.photoUrl && <AvatarImage src={selected.photoUrl} alt={selected.name} />}
-                    <AvatarFallback className="text-xl bg-teal/20 text-teal-700 dark:text-teal-300 font-semibold">
-                      {getInitials(selected.name)}
-                    </AvatarFallback>
-                  </Avatar>
+                  <Avatar name={selected.name} size={14} />
                   <div>
-                    <DialogTitle className="text-xl">{selected.name}</DialogTitle>
-                    <p className="text-sm text-muted-foreground mt-0.5">
-                      {[selected.class?.grade?.name, selected.class?.name].filter(Boolean).join(' · ')}
+                    <DialogTitle className="text-lg">{selected.name}</DialogTitle>
+                    <p className="text-sm text-muted-foreground">
+                      {selected.class?.grade?.name ? `${selected.class.grade.name} · ` : ''}{selected.class?.name || 'Sem turma'}
                     </p>
-                    <Badge variant={statusVariants[selected.status] || 'secondary'} className="mt-1">
+                    <Badge variant={STATUS_BADGE[selected.status] || 'secondary'} className="mt-0.5">
                       {STATUS_LABELS[selected.status] || selected.status}
                     </Badge>
                   </div>
@@ -868,32 +669,38 @@ export default function AlunosPage() {
                   <TabsTrigger value="dados">Dados</TabsTrigger>
                   <TabsTrigger value="responsaveis">Responsáveis</TabsTrigger>
                   <TabsTrigger value="notas">Notas</TabsTrigger>
-                  <TabsTrigger value="historico">Ficha Disciplinar</TabsTrigger>
-                  <TabsTrigger value="resumo">Resumo</TabsTrigger>
+                  <TabsTrigger value="ficha">Ficha Disciplinar</TabsTrigger>
                 </TabsList>
 
-                <TabsContent value="dados" className="space-y-3 pt-4">
+                {/* Dados */}
+                <TabsContent value="dados" className="pt-4">
                   <div className="grid grid-cols-2 gap-4 text-sm">
-                    <Info label="Matrícula" value={selected.enrollment} />
-                    <Info label="CPF" value={selected.cpf || '-'} />
-                    <Info label="Nascimento" value={formatDate(selected.birthDate)} />
-                    <Info label="Telefone" value={selected.phone || '-'} />
-                    {selected.email && <Info label="E-mail" value={selected.email} />}
+                    <InfoField label="Matrícula" value={selected.enrollment} />
+                    <InfoField label="CGM" value={selected.cgm} />
+                    <InfoField label="CPF" value={selected.cpf} />
+                    <InfoField label="RG" value={(selected as any).rg} />
+                    <InfoField label="Nascimento" value={formatDate(selected.birthDate)} />
+                    <InfoField label="Telefone" value={selected.phone} />
+                    <InfoField label="E-mail" value={selected.email} />
+                    <InfoField label="Turma" value={selected.class ? `${selected.class.grade?.name || ''} ${selected.class.name}`.trim() : undefined} />
                   </div>
                   {selected.address && (
-                    <Info label="Endereço" value={[selected.address, selected.city, selected.state].filter(Boolean).join(', ')} />
+                    <div className="mt-3">
+                      <InfoField label="Endereço" value={`${selected.address}${selected.city ? `, ${selected.city}` : ''}${(selected as any).state ? ` - ${(selected as any).state}` : ''}`} />
+                    </div>
                   )}
-                  {selected.observations && <Info label="Observações" value={selected.observations} />}
-                  {selected.medicalInfo && <Info label="Informações de saúde" value={selected.medicalInfo} />}
+                  {selected.observations && <div className="mt-3"><InfoField label="Observações pedagógicas" value={selected.observations} /></div>}
+                  {selected.medicalInfo && <div className="mt-3"><InfoField label="Informações de saúde" value={selected.medicalInfo} /></div>}
                 </TabsContent>
 
+                {/* Responsáveis */}
                 <TabsContent value="responsaveis" className="pt-4">
                   {selected.guardians.length === 0 ? (
                     <p className="text-sm text-muted-foreground">Nenhum responsável cadastrado.</p>
                   ) : (
                     <div className="space-y-3">
-                      {selected.guardians.map((g, i) => (
-                        <Card key={g.id || i}>
+                      {selected.guardians.map(g => (
+                        <Card key={g.id}>
                           <CardContent className="p-4 space-y-1">
                             <div className="flex items-center justify-between">
                               <p className="font-medium">{g.name}</p>
@@ -909,37 +716,20 @@ export default function AlunosPage() {
                   )}
                 </TabsContent>
 
+                {/* Notas */}
                 <TabsContent value="notas">
-                  <NotasTab
-                    gradeRecords={selected.gradeRecords || []}
-                    subjectAbsences={selected.subjectAbsences}
-                  />
+                  <NotasTab student={selected} />
                 </TabsContent>
 
-                <TabsContent value="historico">
-                  <HistoricoTab studentId={selected.id} currentUserId={currentUserId} />
-                </TabsContent>
-
-                <TabsContent value="resumo" className="pt-4">
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <Info label="Tarefas entregues" value={String(selected._count?.homeworkSubmissions || 0)} />
-                    <Info label="Avaliações lançadas" value={String(selected._count?.gradeRecords || 0)} />
-                  </div>
+                {/* Ficha Disciplinar */}
+                <TabsContent value="ficha">
+                  <FichaDisciplinarTab studentId={selected.id} />
                 </TabsContent>
               </Tabs>
             </>
           )}
         </DialogContent>
       </Dialog>
-    </div>
-  )
-}
-
-function Info({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{label}</p>
-      <p className="text-sm mt-0.5">{value}</p>
     </div>
   )
 }
