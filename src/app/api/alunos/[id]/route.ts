@@ -21,7 +21,38 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   })
 
   if (!student) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  return NextResponse.json(student)
+
+  // Compute per-subject absence counts by crossing StudentAttendance dates with ClassRecord dates
+  let subjectAbsences: Record<string, { faltas: number; faltasJustificadas: number }> = {}
+  if (student.classId) {
+    const [attendances, classRecords] = await Promise.all([
+      prisma.studentAttendance.findMany({
+        where: { studentId: params.id, status: { in: ['FALTA', 'FALTA_JUSTIFICADA'] } },
+        select: { date: true, status: true },
+      }),
+      prisma.classRecord.findMany({
+        where: { classId: student.classId, subjectId: { not: null } },
+        select: { subjectId: true, date: true },
+      }),
+    ])
+
+    const faltaMap = new Map<string, string>()
+    for (const a of attendances) {
+      faltaMap.set(a.date.toISOString().slice(0, 10), a.status)
+    }
+
+    for (const cr of classRecords) {
+      if (!cr.subjectId) continue
+      const dateStr = cr.date.toISOString().slice(0, 10)
+      const status = faltaMap.get(dateStr)
+      if (!status) continue
+      if (!subjectAbsences[cr.subjectId]) subjectAbsences[cr.subjectId] = { faltas: 0, faltasJustificadas: 0 }
+      if (status === 'FALTA') subjectAbsences[cr.subjectId].faltas++
+      else subjectAbsences[cr.subjectId].faltasJustificadas++
+    }
+  }
+
+  return NextResponse.json({ ...student, subjectAbsences })
 }
 
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {

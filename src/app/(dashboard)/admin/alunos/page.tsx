@@ -13,7 +13,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
   Plus, Search, UserCheck, Eye, ChevronUp, ChevronDown, ChevronsUpDown,
-  Camera, X, Trash2, BookOpen,
+  Camera, X, Trash2, BookOpen, ChevronRight,
 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { STATUS_LABELS, ASSESSMENT_TYPE_LABELS, formatDate } from '@/lib/utils'
@@ -32,6 +32,7 @@ interface GradeRecord {
     type: string
     maxScore: number
     weight: number
+    date?: string
     subject: { id: string; name: string }
   }
 }
@@ -57,6 +58,7 @@ interface Student {
   class?: { id: string; name: string; gradeId?: string; grade?: { id: string; name: string } }
   guardians: Guardian[]
   gradeRecords?: GradeRecord[]
+  subjectAbsences?: Record<string, { faltas: number; faltasJustificadas: number }>
   _count?: { homeworkSubmissions: number; gradeRecords: number }
   _hwTotal?: number
 }
@@ -135,106 +137,140 @@ function SortIcon({ col, active, dir }: { col: SortCol; active: SortCol; dir: So
     : <ChevronDown className="h-3 w-3 ml-1 text-foreground" />
 }
 
-// ─── Grade records tab ────────────────────────────────────────────────────────
+// ─── Notas Tab ────────────────────────────────────────────────────────────────
 
-function NotasTab({ gradeRecords }: { gradeRecords: GradeRecord[] }) {
+function NotasTab({
+  gradeRecords,
+  subjectAbsences,
+}: {
+  gradeRecords: GradeRecord[]
+  subjectAbsences?: Record<string, { faltas: number; faltasJustificadas: number }>
+}) {
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
+
+  const toggle = (key: string) =>
+    setExpanded(prev => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key); else next.add(key)
+      return next
+    })
+
   if (!gradeRecords || gradeRecords.length === 0) {
     return <p className="text-sm text-muted-foreground pt-4">Nenhuma nota lançada ainda.</p>
   }
 
-  // Group by period → subject
-  const byPeriod = new Map<string, Map<string, GradeRecord[]>>()
+  // Group: period → subjectId → records
+  const byPeriod = new Map<string, Map<string, { name: string; records: GradeRecord[] }>>()
   for (const r of gradeRecords) {
     const period = r.assessment.period || 'Sem período'
-    const subject = r.assessment.subject.name
+    const subId = r.assessment.subject.id
+    const subName = r.assessment.subject.name
     if (!byPeriod.has(period)) byPeriod.set(period, new Map())
     const subMap = byPeriod.get(period)!
-    if (!subMap.has(subject)) subMap.set(subject, [])
-    subMap.get(subject)!.push(r)
+    if (!subMap.has(subId)) subMap.set(subId, { name: subName, records: [] })
+    subMap.get(subId)!.records.push(r)
   }
 
-  // Sort periods naturally
   const periods = Array.from(byPeriod.keys()).sort((a, b) => a.localeCompare(b, 'pt-BR', { numeric: true }))
 
   return (
     <div className="pt-4 space-y-6">
       {periods.map(period => {
         const subMap = byPeriod.get(period)!
-        const subjects = Array.from(subMap.keys()).sort()
-
-        // Weighted average for the period
-        let totalWeighted = 0
-        let totalWeight = 0
-        for (const recs of Array.from(subMap.values())) {
-          for (const r of recs) {
-            if (r.score !== null) {
-              totalWeighted += (r.score / r.assessment.maxScore) * 10 * r.assessment.weight
-              totalWeight += r.assessment.weight
-            }
-          }
-        }
-        const periodAvg = totalWeight > 0 ? totalWeighted / totalWeight : null
+        const subjects = Array.from(subMap.entries()).sort(([, a], [, b]) => a.name.localeCompare(b.name, 'pt-BR'))
 
         return (
           <div key={period}>
-            <div className="flex items-center justify-between mb-3">
-              <h4 className="text-sm font-semibold flex items-center gap-2">
-                <BookOpen className="h-4 w-4 text-muted-foreground" />
-                {period}
-              </h4>
-              {periodAvg !== null && (
-                <span className={`text-sm font-bold ${scoreColor(periodAvg, 10)}`}>
-                  Média: {periodAvg.toFixed(1)}
-                </span>
-              )}
+            <div className="flex items-center gap-2 mb-3">
+              <BookOpen className="h-4 w-4 text-muted-foreground" />
+              <h4 className="text-sm font-semibold">{period}</h4>
             </div>
 
-            <div className="space-y-3">
-              {subjects.map(subject => {
-                const recs = subMap.get(subject)!
-                // Subject average (weighted within subject)
-                const scored = recs.filter(r => r.score !== null)
-                const subAvg = scored.length > 0
+            <div className="space-y-2">
+              {subjects.map(([subId, { name: subName, records }]) => {
+                // Sort records by date, then by name
+                const sorted = [...records].sort((a, b) => {
+                  const da = a.assessment.date ?? a.launchedAt
+                  const db = b.assessment.date ?? b.launchedAt
+                  return da < db ? -1 : da > db ? 1 : 0
+                })
+
+                const scored = sorted.filter(r => r.score !== null)
+                const avg = scored.length > 0
                   ? scored.reduce((s, r) => s + (r.score! / r.assessment.maxScore) * 10 * r.assessment.weight, 0) /
                     scored.reduce((s, r) => s + r.assessment.weight, 0)
                   : null
 
+                const cardKey = `${period}::${subId}`
+                const isOpen = expanded.has(cardKey)
+                const abs = subjectAbsences?.[subId]
+
                 return (
-                  <Card key={subject}>
-                    <CardContent className="p-3">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-sm font-medium">{subject}</span>
-                        {subAvg !== null && (
-                          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full bg-muted ${scoreColor(subAvg, 10)}`}>
-                            {subAvg.toFixed(1)}
-                          </span>
-                        )}
+                  <Card key={subId} className="overflow-hidden">
+                    {/* Clickable header */}
+                    <button
+                      className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-muted/40 transition-colors text-left"
+                      onClick={() => toggle(cardKey)}
+                    >
+                      <div className="flex items-center gap-2">
+                        {isOpen
+                          ? <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
+                          : <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                        }
+                        <span className="text-sm font-medium">{subName}</span>
                       </div>
-                      <div className="space-y-1">
-                        {recs.map(r => (
-                          <div key={r.id} className="flex items-center justify-between text-xs text-muted-foreground">
-                            <span className="truncate max-w-[60%]">{r.assessment.name}</span>
-                            <div className="flex items-center gap-3">
-                              <span className="text-muted-foreground/70">
+                      {avg !== null && (
+                        <span className={`text-sm font-bold tabular-nums ${scoreColor(avg, 10)}`}>
+                          {avg.toFixed(1)}
+                        </span>
+                      )}
+                    </button>
+
+                    {/* Expanded detail */}
+                    {isOpen && (
+                      <div className="border-t px-3 pb-3 pt-2 space-y-1.5 bg-muted/10">
+                        {sorted.map((r, idx) => (
+                          <div key={r.id} className="flex items-center justify-between text-xs">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="font-semibold text-muted-foreground w-6 shrink-0">P{idx + 1}</span>
+                              <span className="text-muted-foreground truncate">{r.assessment.name}</span>
+                              <span className="text-muted-foreground/60 shrink-0">
                                 {ASSESSMENT_TYPE_LABELS[r.assessment.type] || r.assessment.type}
                               </span>
-                              {r.score !== null ? (
-                                <span className={`font-semibold tabular-nums ${scoreColor(r.score, r.assessment.maxScore)}`}>
-                                  {r.score.toFixed(1)} / {r.assessment.maxScore.toFixed(0)}
-                                </span>
-                              ) : (
-                                <span className="text-muted-foreground/50 italic">—</span>
-                              )}
                             </div>
+                            {r.score !== null ? (
+                              <span className={`font-semibold tabular-nums shrink-0 ${scoreColor(r.score, r.assessment.maxScore)}`}>
+                                {r.score.toFixed(1)} / {r.assessment.maxScore.toFixed(0)}
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground/50 shrink-0">—</span>
+                            )}
                           </div>
                         ))}
+
+                        {/* Average row */}
+                        <div className="border-t pt-1.5 flex items-center justify-between text-xs">
+                          <span className="text-muted-foreground">Média ponderada</span>
+                          {avg !== null ? (
+                            <span className={`font-bold ${scoreColor(avg, 10)}`}>{avg.toFixed(1)}</span>
+                          ) : (
+                            <span className="text-muted-foreground/50">—</span>
+                          )}
+                        </div>
+
+                        {/* Absences row */}
+                        {abs !== undefined && (
+                          <div className="flex items-center justify-between text-xs text-muted-foreground">
+                            <span>Faltas neste componente</span>
+                            <span className={(abs.faltas + abs.faltasJustificadas) > 0 ? 'text-amber-600 dark:text-amber-400 font-medium' : ''}>
+                              {abs.faltas > 0 || abs.faltasJustificadas > 0
+                                ? `${abs.faltas} falta${abs.faltas !== 1 ? 's' : ''}${abs.faltasJustificadas > 0 ? ` · ${abs.faltasJustificadas} justif.` : ''}`
+                                : 'Sem faltas'}
+                            </span>
+                          </div>
+                        )}
                       </div>
-                      {scored.length < recs.length && (
-                        <p className="text-xs text-muted-foreground/60 mt-1">
-                          {recs.length - scored.length} avaliação(ões) sem nota
-                        </p>
-                      )}
-                    </CardContent>
+                    )}
                   </Card>
                 )
               })}
@@ -491,7 +527,6 @@ export default function AlunosPage() {
               <TabsTrigger value="responsaveis" className="flex-1">Responsáveis</TabsTrigger>
             </TabsList>
 
-            {/* Personal data */}
             <TabsContent value="pessoal" className="space-y-4 pt-4">
               <div className="flex items-center gap-4">
                 <Avatar className="h-20 w-20">
@@ -522,60 +557,39 @@ export default function AlunosPage() {
                 <Input placeholder="Nome do aluno" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
               </div>
               <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>CPF</Label>
-                  <Input placeholder="000.000.000-00" value={form.cpf} onChange={e => setForm({ ...form, cpf: e.target.value })} />
-                </div>
-                <div className="space-y-2">
-                  <Label>RG</Label>
-                  <Input value={form.rg} onChange={e => setForm({ ...form, rg: e.target.value })} />
-                </div>
+                <div className="space-y-2"><Label>CPF</Label>
+                  <Input placeholder="000.000.000-00" value={form.cpf} onChange={e => setForm({ ...form, cpf: e.target.value })} /></div>
+                <div className="space-y-2"><Label>RG</Label>
+                  <Input value={form.rg} onChange={e => setForm({ ...form, rg: e.target.value })} /></div>
               </div>
               <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Data de nascimento</Label>
-                  <Input type="date" value={form.birthDate} onChange={e => setForm({ ...form, birthDate: e.target.value })} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Telefone</Label>
-                  <Input placeholder="(11) 99999-9999" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} />
-                </div>
+                <div className="space-y-2"><Label>Data de nascimento</Label>
+                  <Input type="date" value={form.birthDate} onChange={e => setForm({ ...form, birthDate: e.target.value })} /></div>
+                <div className="space-y-2"><Label>Telefone</Label>
+                  <Input placeholder="(11) 99999-9999" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} /></div>
               </div>
-              <div className="space-y-2">
-                <Label>E-mail</Label>
-                <Input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
-              </div>
-              <div className="space-y-2">
-                <Label>Endereço</Label>
-                <Input placeholder="Rua, número, bairro" value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} />
-              </div>
+              <div className="space-y-2"><Label>E-mail</Label>
+                <Input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} /></div>
+              <div className="space-y-2"><Label>Endereço</Label>
+                <Input placeholder="Rua, número, bairro" value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} /></div>
               <div className="grid grid-cols-3 gap-4">
-                <div className="space-y-2 col-span-2">
-                  <Label>Cidade</Label>
-                  <Input value={form.city} onChange={e => setForm({ ...form, city: e.target.value })} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Estado</Label>
-                  <Input placeholder="SP" maxLength={2} value={form.state} onChange={e => setForm({ ...form, state: e.target.value })} />
-                </div>
+                <div className="space-y-2 col-span-2"><Label>Cidade</Label>
+                  <Input value={form.city} onChange={e => setForm({ ...form, city: e.target.value })} /></div>
+                <div className="space-y-2"><Label>Estado</Label>
+                  <Input placeholder="SP" maxLength={2} value={form.state} onChange={e => setForm({ ...form, state: e.target.value })} /></div>
               </div>
             </TabsContent>
 
-            {/* Academic */}
             <TabsContent value="academico" className="space-y-4 pt-4">
-              <div className="space-y-2">
-                <Label>Matrícula *</Label>
-                <Input placeholder="2024-001" value={form.enrollment} onChange={e => setForm({ ...form, enrollment: e.target.value })} />
-              </div>
+              <div className="space-y-2"><Label>Matrícula *</Label>
+                <Input placeholder="2024-001" value={form.enrollment} onChange={e => setForm({ ...form, enrollment: e.target.value })} /></div>
               <div className="space-y-2">
                 <Label>Turma</Label>
                 <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                   value={form.classId} onChange={e => setForm({ ...form, classId: e.target.value })}>
                   <option value="">Selecionar turma...</option>
                   {classes.map(c => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}{c.grade ? ` — ${c.grade.name}` : ''}
-                    </option>
+                    <option key={c.id} value={c.id}>{c.name}{c.grade ? ` — ${c.grade.name}` : ''}</option>
                   ))}
                 </select>
               </div>
@@ -586,17 +600,12 @@ export default function AlunosPage() {
                   {Object.entries(STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                 </select>
               </div>
-              <div className="space-y-2">
-                <Label>Observações pedagógicas</Label>
-                <Textarea rows={3} value={form.observations} onChange={e => setForm({ ...form, observations: e.target.value })} />
-              </div>
-              <div className="space-y-2">
-                <Label>Informações de saúde</Label>
-                <Textarea rows={2} placeholder="Alergias, condições, medicamentos..." value={form.medicalInfo} onChange={e => setForm({ ...form, medicalInfo: e.target.value })} />
-              </div>
+              <div className="space-y-2"><Label>Observações pedagógicas</Label>
+                <Textarea rows={3} value={form.observations} onChange={e => setForm({ ...form, observations: e.target.value })} /></div>
+              <div className="space-y-2"><Label>Informações de saúde</Label>
+                <Textarea rows={2} placeholder="Alergias, condições, medicamentos..." value={form.medicalInfo} onChange={e => setForm({ ...form, medicalInfo: e.target.value })} /></div>
             </TabsContent>
 
-            {/* Guardians */}
             <TabsContent value="responsaveis" className="pt-4 space-y-4">
               {guardians.length === 0
                 ? <p className="text-sm text-muted-foreground">Nenhum responsável adicionado.</p>
@@ -671,7 +680,7 @@ export default function AlunosPage() {
                   <TabsTrigger value="dados">Dados</TabsTrigger>
                   <TabsTrigger value="responsaveis">Responsáveis</TabsTrigger>
                   <TabsTrigger value="notas">Notas</TabsTrigger>
-                  <TabsTrigger value="academico">Resumo</TabsTrigger>
+                  <TabsTrigger value="resumo">Resumo</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="dados" className="space-y-3 pt-4">
@@ -712,13 +721,16 @@ export default function AlunosPage() {
                 </TabsContent>
 
                 <TabsContent value="notas">
-                  <NotasTab gradeRecords={selected.gradeRecords || []} />
+                  <NotasTab
+                    gradeRecords={selected.gradeRecords || []}
+                    subjectAbsences={selected.subjectAbsences}
+                  />
                 </TabsContent>
 
-                <TabsContent value="academico" className="pt-4">
+                <TabsContent value="resumo" className="pt-4">
                   <div className="grid grid-cols-2 gap-4 text-sm">
-                    <Info label="Tarefas entregues" value={String((selected as any)._count?.homeworkSubmissions || 0)} />
-                    <Info label="Avaliações lançadas" value={String((selected as any)._count?.gradeRecords || 0)} />
+                    <Info label="Tarefas entregues" value={String(selected._count?.homeworkSubmissions || 0)} />
+                    <Info label="Avaliações lançadas" value={String(selected._count?.gradeRecords || 0)} />
                   </div>
                 </TabsContent>
               </Tabs>
