@@ -64,22 +64,27 @@ model Grade {
   id        String   @id @default(cuid())
   name      String
   segmentId String
+  order     Int      @default(0)
   createdAt DateTime @default(now())
 
-  segment Segment @relation(fields: [segmentId], references: [id])
-  classes Class[]
+  segment       Segment        @relation(fields: [segmentId], references: [id])
+  classes       Class[]
+  gradeSubjects GradeSubject[]
 
   @@map("grades")
 }
 
 model Subject {
-  id        String  @id @default(cuid())
-  name      String
-  segmentId String?
-  active    Boolean @default(true)
-  createdAt DateTime @default(now())
+  id          String  @id @default(cuid())
+  name        String
+  code        String?
+  segmentId   String?
+  weeklyHours Int     @default(0)
+  active      Boolean @default(true)
+  createdAt   DateTime @default(now())
 
   segment         Segment?         @relation(fields: [segmentId], references: [id])
+  gradeSubjects   GradeSubject[]
   teacherSubjects TeacherSubject[]
   teacherClasses  TeacherClass[]
   lessons         Lesson[]
@@ -88,6 +93,20 @@ model Subject {
   classRecords    ClassRecord[]
 
   @@map("subjects")
+}
+
+// Links subjects to specific grades — the curriculum matrix
+model GradeSubject {
+  gradeId     String
+  subjectId   String
+  weeklyHours Int    @default(0)
+  order       Int    @default(0)
+
+  grade   Grade   @relation(fields: [gradeId], references: [id], onDelete: Cascade)
+  subject Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+  @@id([gradeId, subjectId])
+  @@map("grade_subjects")
 }
 
 // ─── Class ────────────────────────────────────────────────────────────────────

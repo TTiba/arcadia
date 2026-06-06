@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils'
 import {
   GraduationCap, LayoutDashboard, Users, BookOpen, School,
   ClipboardList, FileText, CheckSquare, Star, Heart,
-  LogOut, ChevronLeft, ChevronRight, UserCheck, Sparkles, MessageSquare, CalendarCheck,
+  LogOut, ChevronLeft, ChevronRight, UserCheck, Sparkles, MessageSquare, CalendarCheck, LayoutGrid,
 } from 'lucide-react'
 import { Avatar, AvatarFallback } from './ui/avatar'
 import { ROLE_LABELS } from '@/lib/utils'
@@ -26,6 +26,7 @@ const navItems: NavItem[] = [
   { href: '/mensagens', label: 'Mensagens', icon: MessageSquare, group: 'GESTÃO' },
   { href: '/admin/turmas', label: 'Turmas', icon: School, roles: ['ADMIN', 'COORDENACAO', 'DIRETOR'], group: 'GESTÃO' },
   { href: '/admin/corpo-docente', label: 'Corpo Docente', icon: Users, roles: ['ADMIN', 'COORDENACAO', 'DIRETOR'], group: 'GESTÃO' },
+  { href: '/admin/curriculo', label: 'Componentes e Currículos', icon: LayoutGrid, roles: ['ADMIN', 'COORDENACAO', 'DIRETOR'], group: 'GESTÃO' },
   { href: '/admin/alunos', label: 'Alunos', icon: UserCheck, roles: ['ADMIN', 'COORDENACAO', 'DIRETOR'], group: 'GESTÃO' },
   { href: '/admin/aulas', label: 'Aulas', icon: BookOpen, roles: ['ADMIN', 'COORDENACAO'], group: 'GESTÃO' },
   { href: '/admin/avaliacoes', label: 'Avaliações', icon: Star, roles: ['ADMIN', 'COORDENACAO'], group: 'GESTÃO' },

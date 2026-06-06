@@ -7,12 +7,19 @@ export async function GET() {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const subjects = await prisma.subject.findMany({
-    include: { segment: true },
+  const segments = await prisma.segment.findMany({
+    include: {
+      grades: {
+        include: {
+          gradeSubjects: { include: { subject: true }, orderBy: { order: 'asc' } },
+        },
+        orderBy: { order: 'asc' },
+      },
+    },
     orderBy: { name: 'asc' },
   })
 
-  return NextResponse.json(subjects)
+  return NextResponse.json(segments)
 }
 
 export async function POST(req: NextRequest) {
@@ -22,18 +29,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  const { name, code, segmentId, weeklyHours } = await req.json()
+  const { name } = await req.json()
   if (!name?.trim()) return NextResponse.json({ error: 'Nome obrigatório' }, { status: 400 })
 
-  const subject = await prisma.subject.create({
-    data: {
-      name: name.trim(),
-      code: code?.trim() || undefined,
-      segmentId: segmentId || undefined,
-      weeklyHours: weeklyHours || 0,
-    },
-    include: { segment: true },
-  })
-
-  return NextResponse.json(subject, { status: 201 })
+  const segment = await prisma.segment.create({ data: { name: name.trim() } })
+  return NextResponse.json(segment, { status: 201 })
 }
