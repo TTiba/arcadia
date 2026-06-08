@@ -49,8 +49,9 @@ ${buildCatalog()}
 - Extraia entidades do pedido e coloque como params dos widgets:
   · turma/série → "classId" (use o nome citado, ex: "9º Ano B")
   · componente/disciplina → "subjectId" (ex: "Matemática")
-  · área SAEB → "area" ("Língua Portuguesa" ou "Matemática")
+  · área SAEB → "area" — use EXATAMENTE "Língua Portuguesa" ou "Matemática" (nunca "lp"/"mat")
   · nota de corte → "threshold"; período em dias → "days"
+- saeb_matriz já cobre Língua Portuguesa E Matemática juntas por padrão. Para mostrar as duas, use UM ÚNICO widget saeb_matriz SEM o param "area". Só informe "area" para restringir a uma única área. Não crie um saeb_matriz por área.
 - Use de 1 a 5 widgets. Nunca repita o mesmo dataKey.
 - size: "full" para tabelas/alertas amplos, "sm" para métricas, "md"/"lg" para listas.
 - O título deve refletir o pedido exato, nunca um rótulo genérico.`

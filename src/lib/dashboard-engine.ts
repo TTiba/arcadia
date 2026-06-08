@@ -4,7 +4,7 @@ import { UserContext, applyClassScope, applyStudentScope } from './user-context'
 // ─── Widget & Config Types ────────────────────────────────────────────────────
 
 export type WidgetSize = 'sm' | 'md' | 'lg' | 'full'
-export type WidgetType = 'METRIC' | 'LIST' | 'PROGRESS_BARS' | 'TABLE' | 'ALERT_LIST'
+export type WidgetType = 'METRIC' | 'LIST' | 'PROGRESS_BARS' | 'TABLE' | 'ALERT_LIST' | 'SAEB_MATRIX'
 
 export interface DashboardWidget {
   id: string
@@ -30,12 +30,21 @@ export type ProgressItem = { label: string; value: number; max: number; color: s
 export type TableData = { headers: string[]; rows: (string | number)[][] }
 export type AlertItem = { label: string; detail: string; type: string }
 
+// Full dataset for the interactive SAEB matrix (filters + cards computed client-side)
+export type SaebMatrixData = {
+  areas: string[]
+  descriptors: { code: string; description: string; area: string }[]
+  classes: { id: string; name: string }[]
+  students: { id: string; name: string; classId: string | null; className: string; scores: Record<string, number> }[]
+}
+
 export type WidgetData =
   | { type: 'METRIC'; data: MetricData }
   | { type: 'LIST'; data: ListItem[] }
   | { type: 'PROGRESS_BARS'; data: ProgressItem[] }
   | { type: 'TABLE'; data: TableData }
   | { type: 'ALERT_LIST'; data: AlertItem[] }
+  | { type: 'SAEB_MATRIX'; data: SaebMatrixData }
 
 // ─── Data Keys ───────────────────────────────────────────────────────────────
 
@@ -45,6 +54,7 @@ export const DATA_KEY_DESCRIPTIONS: Record<string, string> = {
   saeb_por_descritor: 'Desempenho por descritor SAEB. Params opcionais: area, classId. Retorna lista com média por descritor',
   saeb_alunos_abaixo: 'Apenas a CONTAGEM de descritores abaixo do básico por aluno (lista resumida). Params opcionais: area, classId',
   saeb_alunos_abaixo_media: 'Tabela detalhada: cada aluno, QUAIS descritores ele está abaixo da média da turma, e a média de desempenho do aluno. Use quando o pedido quer ver o aluno + os descritores + a média. Params opcionais: area, classId',
+  saeb_matriz: 'Matriz INTERATIVA: todos os alunos × cada descritor SAEB com a nota de cada aluno em cada descritor, com FILTROS por turma e por descritor e CARDS de média por turma selecionada. Use quando o pedido quer o desempenho de cada aluno em cada descritor (não só a média), filtros, ou comparar turmas. Cobre LP e Matemática por padrão. Params opcionais: area (para limitar a uma área), classId',
   enem_media_por_competencia: 'Média por competência ENEM. Params opcionais: classId',
   enem_ranking_alunos: 'Ranking de alunos por pontuação média ENEM. Params opcionais: classId',
   notas_media_turma: 'Média de notas por disciplina/avaliação. Params opcionais: classId, subjectId',
@@ -61,11 +71,20 @@ export const DATA_KEY_DESCRIPTIONS: Record<string, string> = {
 
 type Params = Record<string, string | number>
 
+// Maps loose area values ("lp", "mat", "português") to the canonical names stored in the DB.
+function normalizeArea(v: unknown): string | undefined {
+  if (v == null || v === '') return undefined
+  const s = String(v).toLowerCase()
+  if (s.includes('port') || s.includes('lingua') || s.includes('língua') || s === 'lp') return 'Língua Portuguesa'
+  if (s.includes('mat')) return 'Matemática'
+  return String(v)
+}
+
 // ─── Query Functions (all receive UserContext for data scoping) ───────────────
 
 async function getSaebMediaGeral(params: Params, ctx: UserContext): Promise<WidgetData> {
   const where = applyStudentScope({}, ctx, params.classId)
-  if (params.area) (where as any).descriptor = { area: params.area }
+  { const _a = normalizeArea(params.area); if (_a) (where as any).descriptor = { area: _a } }
 
   const performances = await prisma.studentSaebPerformance.findMany({
     where,
@@ -89,7 +108,7 @@ async function getSaebMediaGeral(params: Params, ctx: UserContext): Promise<Widg
 
 async function getSaebNivelDistribuicao(params: Params, ctx: UserContext): Promise<WidgetData> {
   const where = applyStudentScope({}, ctx, params.classId)
-  if (params.area) (where as any).descriptor = { area: params.area }
+  { const _a = normalizeArea(params.area); if (_a) (where as any).descriptor = { area: _a } }
 
   const perfs = await prisma.studentSaebPerformance.findMany({ where })
   const total = perfs.length || 1
@@ -109,7 +128,7 @@ async function getSaebNivelDistribuicao(params: Params, ctx: UserContext): Promi
 
 async function getSaebPorDescritor(params: Params, ctx: UserContext): Promise<WidgetData> {
   const where = applyStudentScope({}, ctx, params.classId)
-  if (params.area) (where as any).descriptor = { area: params.area }
+  { const _a = normalizeArea(params.area); if (_a) (where as any).descriptor = { area: _a } }
 
   const perfs = await prisma.studentSaebPerformance.findMany({
     where,
@@ -134,7 +153,7 @@ async function getSaebPorDescritor(params: Params, ctx: UserContext): Promise<Wi
 
 async function getSaebAlunosAbaixo(params: Params, ctx: UserContext): Promise<WidgetData> {
   const where = applyStudentScope({ level: 'ABAIXO_BASICO' }, ctx, params.classId)
-  if (params.area) (where as any).descriptor = { area: params.area }
+  { const _a = normalizeArea(params.area); if (_a) (where as any).descriptor = { area: _a } }
 
   const perfs = await prisma.studentSaebPerformance.findMany({
     where,
@@ -159,7 +178,7 @@ async function getSaebAlunosAbaixo(params: Params, ctx: UserContext): Promise<Wi
 // nos descritores, com o aluno, os descritores e a média do aluno".
 async function getSaebAlunosAbaixoMedia(params: Params, ctx: UserContext): Promise<WidgetData> {
   const where = applyStudentScope({}, ctx, params.classId)
-  if (params.area) (where as any).descriptor = { area: params.area }
+  { const _a = normalizeArea(params.area); if (_a) (where as any).descriptor = { area: _a } }
 
   const perfs = await prisma.studentSaebPerformance.findMany({
     where,
@@ -196,6 +215,46 @@ async function getSaebAlunosAbaixoMedia(params: Params, ctx: UserContext): Promi
     type: 'TABLE',
     data: { headers: ['Aluno', 'Descritores abaixo da média', 'Média do aluno'], rows },
   }
+}
+
+// Full student × descriptor matrix for one or more SAEB areas. The interactive
+// widget filters by class/descriptor and computes per-class averages in the browser.
+async function getSaebMatriz(params: Params, ctx: UserContext): Promise<WidgetData> {
+  const normalized = normalizeArea(params.area)
+  const areas = normalized ? [normalized] : ['Língua Portuguesa', 'Matemática']
+  const where = applyStudentScope({}, ctx, params.classId)
+  ;(where as any).descriptor = { area: { in: areas } }
+
+  const perfs = await prisma.studentSaebPerformance.findMany({
+    where,
+    include: { student: { include: { class: true } }, descriptor: true },
+  })
+
+  const descriptorsMap = new Map<string, { code: string; description: string; area: string }>()
+  const classesMap = new Map<string, { id: string; name: string }>()
+  const studentsMap = new Map<string, SaebMatrixData['students'][number]>()
+
+  for (const p of perfs) {
+    descriptorsMap.set(p.descriptor.code, {
+      code: p.descriptor.code, description: p.descriptor.description, area: p.descriptor.area,
+    })
+    const cls = p.student.class
+    if (cls) classesMap.set(cls.id, { id: cls.id, name: cls.name })
+    let s = studentsMap.get(p.studentId)
+    if (!s) {
+      s = { id: p.studentId, name: p.student.name, classId: p.student.classId ?? null, className: cls?.name ?? '—', scores: {} }
+      studentsMap.set(p.studentId, s)
+    }
+    s.scores[p.descriptor.code] = p.score
+  }
+
+  const descriptors = Array.from(descriptorsMap.values())
+    .sort((a, b) => a.area.localeCompare(b.area) || a.code.localeCompare(b.code))
+  const classes = Array.from(classesMap.values()).sort((a, b) => a.name.localeCompare(b.name))
+  const students = Array.from(studentsMap.values())
+    .sort((a, b) => a.className.localeCompare(b.className) || a.name.localeCompare(b.name))
+
+  return { type: 'SAEB_MATRIX', data: { areas, descriptors, classes, students } }
 }
 
 async function getEnemMediaPorCompetencia(params: Params, ctx: UserContext): Promise<WidgetData> {
@@ -543,6 +602,7 @@ const ENGINE: Record<string, QueryFn> = {
   saeb_por_descritor: getSaebPorDescritor,
   saeb_alunos_abaixo: getSaebAlunosAbaixo,
   saeb_alunos_abaixo_media: getSaebAlunosAbaixoMedia,
+  saeb_matriz: getSaebMatriz,
   enem_media_por_competencia: getEnemMediaPorCompetencia,
   enem_ranking_alunos: getEnemRankingAlunos,
   notas_media_turma: getNotasMediaTurma,
@@ -565,6 +625,7 @@ export const DATA_KEY_WIDGET_TYPES: Record<string, WidgetType> = {
   saeb_por_descritor: 'TABLE',
   saeb_alunos_abaixo: 'LIST',
   saeb_alunos_abaixo_media: 'TABLE',
+  saeb_matriz: 'SAEB_MATRIX',
   enem_media_por_competencia: 'TABLE',
   enem_ranking_alunos: 'LIST',
   notas_media_turma: 'TABLE',
