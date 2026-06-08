@@ -172,7 +172,7 @@ export default function MeuVelaPage() {
           <div className="bg-gray-50 rounded-lg p-3">
             <p className="text-xs font-medium text-gray-500 mb-2">Visões que serão exibidas (dados ao vivo a cada abertura):</p>
             <div className="flex flex-wrap gap-2">
-              {preview.config.widgets.map((w, i) => (
+              {(preview.config.widgets ?? []).map((w, i) => (
                 <span key={i} className="text-xs px-2.5 py-1 bg-white border rounded-full text-gray-700">
                   {w.title}
                   {w.params && Object.values(w.params).length > 0 && (
@@ -180,6 +180,9 @@ export default function MeuVelaPage() {
                   )}
                 </span>
               ))}
+              {(preview.config.widgets ?? []).length === 0 && (
+                <span className="text-xs text-gray-400">Nenhuma visão reconhecida — tente gerar novamente.</span>
+              )}
             </div>
           </div>
           <div className="flex gap-3">
