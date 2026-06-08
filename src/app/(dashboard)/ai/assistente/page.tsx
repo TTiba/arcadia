@@ -4,16 +4,25 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Bot, Send, User, Loader2, Sparkles, AlertCircle, Trash2 } from 'lucide-react'
+import { Bot, Send, User, Loader2, Sparkles, AlertCircle, Trash2, Check, X, CheckCircle2, Zap } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const STORAGE_KEY = 'vela_chat_history'
+
+interface PendingAction {
+  tool: string
+  args: any
+  summary: string
+}
 
 interface Message {
   role: 'user' | 'assistant'
   content: string
   model?: string
   cost?: number
+  pendingAction?: PendingAction
+  actionStatus?: 'pending' | 'done' | 'cancelled'
+  actionResult?: string
 }
 
 const QUICK_PROMPTS = [
@@ -191,6 +200,51 @@ function loadStoredMessages(): Message[] {
   return []
 }
 
+function ActionCard({ action, status, result, disabled, onConfirm, onCancel }: {
+  action: { tool: string; summary: string }
+  status?: 'pending' | 'done' | 'cancelled'
+  result?: string
+  disabled: boolean
+  onConfirm: () => void
+  onCancel: () => void
+}) {
+  return (
+    <div className="ml-11 max-w-[80%]">
+      <Card className={cn(
+        'border',
+        status === 'done' ? 'border-green-300 bg-green-50' :
+        status === 'cancelled' ? 'border-border bg-muted/40' :
+        'border-amber-300 bg-amber-50'
+      )}>
+        <CardContent className="p-3 space-y-2">
+          <div className="flex items-center gap-1.5 text-xs font-semibold">
+            {status === 'done'
+              ? <><CheckCircle2 className="h-3.5 w-3.5 text-green-600" /> <span className="text-green-700">Ação executada</span></>
+              : status === 'cancelled'
+              ? <><X className="h-3.5 w-3.5 text-muted-foreground" /> <span className="text-muted-foreground">Ação cancelada</span></>
+              : <><Zap className="h-3.5 w-3.5 text-amber-600" /> <span className="text-amber-700">Confirmação necessária</span></>
+            }
+          </div>
+          <p className="text-sm">{action.summary}</p>
+          {status === 'done' && result && (
+            <p className="text-xs text-green-700">{result}</p>
+          )}
+          {status === 'pending' && (
+            <div className="flex gap-2 pt-1">
+              <Button size="sm" onClick={onConfirm} disabled={disabled} className="bg-green-600 hover:bg-green-700 gap-1.5">
+                <Check className="h-3.5 w-3.5" /> Confirmar
+              </Button>
+              <Button size="sm" variant="outline" onClick={onCancel} disabled={disabled} className="gap-1.5">
+                <X className="h-3.5 w-3.5" /> Cancelar
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
 export default function AssistentePage() {
   const [messages, setMessages] = useState<Message[]>([{ role: 'assistant', content: WELCOME_CONTENT }])
   const [input, setInput] = useState('')
@@ -247,13 +301,52 @@ export default function AssistentePage() {
       if (!res.ok) {
         setError(data.error || `Erro ${res.status} ao conectar com o assistente.`)
       } else {
-        setMessages(prev => [...prev, { role: 'assistant', content: data.message, model: data.model, cost: data.cost }])
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: data.message || (data.pendingAction ? 'Revise a ação abaixo e confirme para executar.' : ''),
+          model: data.model,
+          cost: data.cost,
+          pendingAction: data.pendingAction,
+          actionStatus: data.pendingAction ? 'pending' : undefined,
+        }])
       }
     } catch (err: any) {
       setError(err?.message ? `Erro de rede: ${err.message}` : 'Erro de rede. Verifique sua conexão.')
     } finally {
       setLoading(false)
     }
+  }
+
+  const confirmAction = async (index: number) => {
+    const msg = messages[index]
+    if (!msg.pendingAction || msg.actionStatus !== 'pending') return
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/ai/execute', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tool: msg.pendingAction.tool, args: msg.pendingAction.args }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setError(data.error || 'Erro ao executar a ação.')
+        return
+      }
+      setMessages(prev => prev.map((m, i) =>
+        i === index ? { ...m, actionStatus: 'done', actionResult: data.message } : m
+      ))
+    } catch (err: any) {
+      setError(err?.message ? `Erro de rede: ${err.message}` : 'Erro de rede. Verifique sua conexão.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const cancelAction = (index: number) => {
+    setMessages(prev => prev.map((m, i) =>
+      i === index ? { ...m, actionStatus: 'cancelled' } : m
+    ))
   }
 
   return (
@@ -298,7 +391,19 @@ export default function AssistentePage() {
       {/* Chat area */}
       <div className="flex-1 overflow-y-auto space-y-4 min-h-0">
         {messages.map((m, i) => (
-          <MessageBubble key={i} message={m} />
+          <div key={i} className="space-y-2">
+            <MessageBubble message={m} />
+            {m.pendingAction && (
+              <ActionCard
+                action={m.pendingAction}
+                status={m.actionStatus}
+                result={m.actionResult}
+                disabled={loading}
+                onConfirm={() => confirmAction(i)}
+                onCancel={() => cancelAction(i)}
+              />
+            )}
+          </div>
         ))}
         {loading && (
           <div className="flex gap-3">

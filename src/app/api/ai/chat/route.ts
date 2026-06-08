@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import Anthropic from '@anthropic-ai/sdk'
+import { ALL_TOOLS, READ_TOOLS, WRITE_TOOL_NAMES, executeReadTool, buildActionSummary } from '@/lib/ai-tools'
 
 // Lazy client — avoids SDK throwing at module load when key is absent
 let _client: Anthropic | null = null
@@ -12,6 +13,8 @@ function getClient() {
 }
 
 const MAX_HISTORY = 6
+const MAX_TOOL_ROUNDS = 6
+const READ_TOOL_NAMES = READ_TOOLS.map(t => t.name)
 
 // ── Model routing ─────────────────────────────────────────────────────────────
 const MODELS = {
@@ -272,49 +275,104 @@ INSTRUÇÕES:
   - Professores registram a chamada em /professor/chamada; coordenação e pedagogia veem frequência em /frequencia
   - Se frequencia30dias.totalFaltasRegistradas = 0, significa que a chamada ainda não foi lançada para esse período — informe isso claramente
 - Se um dado específico não estiver no contexto, diga isso em uma linha — NUNCA fabrique ou infira dados
-- Nunca invente dados. Se um campo for null ou ausente, diga explicitamente.`
+- Nunca invente dados. Se um campo for null ou ausente, diga explicitamente.
+
+AÇÕES (cadastros):
+- Você pode CADASTRAR no sistema usando ferramentas: membros do corpo docente (professor/pedagogo/secretário), alunos, componentes curriculares e itens de currículo
+- Antes de qualquer cadastro, SEMPRE resolva nomes em IDs usando as ferramentas de busca (buscar_turmas, buscar_componentes, buscar_series, buscar_corpo_docente, buscar_alunos)
+- Ex: "cadastre o professor João em Ciências nas turmas 7A e 7B" → use buscar_componentes("Ciências") e buscar_turmas("7") para obter os IDs, depois chame criar_membro_docente com os pares turma+componente
+- Para professor, monte turmasComponentes (um par classId+subjectId por turma). Para pedagogo/secretário, use turmaIds
+- Se faltar uma informação essencial (ex: e-mail do professor), PERGUNTE ao usuário antes de chamar a ferramenta de criação — não invente e-mails ou matrículas
+- As ferramentas de criação NÃO gravam imediatamente: o usuário verá um resumo e confirmará. Não diga que já cadastrou — diga que vai preparar a ação para confirmação.`
 
   const recentMessages = messages.slice(-MAX_HISTORY)
   const lastUserMessage = [...recentMessages].reverse().find(m => m.role === 'user')?.content ?? ''
   const model = selectModel(lastUserMessage)
-
-  let response: Anthropic.Message
-  try {
-    response = await getClient().messages.create({
-      model,
-      max_tokens: 1500,
-      system: [
-        {
-          type: 'text',
-          text: systemPrompt,
-          // @ts-expect-error cache_control is supported but not yet in SDK types
-          cache_control: { type: 'ephemeral' },
-        }
-      ],
-      messages: recentMessages.map((m: { role: string; content: string }) => ({
-        role: m.role as 'user' | 'assistant',
-        content: m.content,
-      })),
-    })
-  } catch (err: any) {
-    console.error('[AI chat] Anthropic API error:', err)
-    const msg = err?.status === 401
-      ? 'Chave da API inválida. Verifique ANTHROPIC_API_KEY no .env.'
-      : err?.status === 429
-      ? 'Limite de requisições atingido. Aguarde um momento e tente novamente.'
-      : `Erro na API de IA: ${err?.message ?? 'erro desconhecido'}`
-    return NextResponse.json({ error: msg }, { status: 502 })
-  }
-
-  const text = response.content[0].type === 'text' ? response.content[0].text : ''
-  const u = response.usage as any
-  const cost = calcCost(model, {
-    input_tokens: u.input_tokens ?? 0,
-    output_tokens: u.output_tokens ?? 0,
-    cache_creation_input_tokens: u.cache_creation_input_tokens ?? 0,
-    cache_read_input_tokens: u.cache_read_input_tokens ?? 0,
-  })
   const modelLabel = model === MODELS.opus ? 'Opus' : model === MODELS.sonnet ? 'Sonnet' : 'Haiku'
 
-  return NextResponse.json({ message: text, model: modelLabel, cost })
+  const systemBlocks = [
+    {
+      type: 'text' as const,
+      text: systemPrompt,
+      cache_control: { type: 'ephemeral' as const },
+    },
+  ]
+
+  const convo: Anthropic.MessageParam[] = recentMessages.map((m: { role: string; content: string }) => ({
+    role: m.role as 'user' | 'assistant',
+    content: m.content,
+  }))
+
+  let totalCost = 0
+  const accCost = (u: any) => {
+    totalCost += calcCost(model, {
+      input_tokens: u?.input_tokens ?? 0,
+      output_tokens: u?.output_tokens ?? 0,
+      cache_creation_input_tokens: u?.cache_creation_input_tokens ?? 0,
+      cache_read_input_tokens: u?.cache_read_input_tokens ?? 0,
+    })
+  }
+  const roundCost = () => Math.round(totalCost * 10000) / 10000
+
+  // ── Tool-use loop ──────────────────────────────────────────────────────────
+  for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+    let response: Anthropic.Message
+    try {
+      response = await getClient().messages.create({
+        model,
+        max_tokens: 1500,
+        system: systemBlocks,
+        tools: ALL_TOOLS,
+        messages: convo,
+      })
+    } catch (err: any) {
+      console.error('[AI chat] Anthropic API error:', err)
+      const msg = err?.status === 401
+        ? 'Chave da API inválida. Verifique ANTHROPIC_API_KEY no .env.'
+        : err?.status === 429
+        ? 'Limite de requisições atingido. Aguarde um momento e tente novamente.'
+        : `Erro na API de IA: ${err?.message ?? 'erro desconhecido'}`
+      return NextResponse.json({ error: msg }, { status: 502 })
+    }
+
+    accCost(response.usage)
+
+    const textBlocks = response.content.filter(c => c.type === 'text') as Anthropic.TextBlock[]
+    const toolUses = response.content.filter(c => c.type === 'tool_use') as Anthropic.ToolUseBlock[]
+    const text = textBlocks.map(b => b.text).join('\n').trim()
+
+    // No tools → final answer
+    if (response.stop_reason !== 'tool_use' || toolUses.length === 0) {
+      return NextResponse.json({ message: text, model: modelLabel, cost: roundCost() })
+    }
+
+    // Write tool → stop and ask user to confirm (do NOT execute)
+    const writeTool = toolUses.find(t => WRITE_TOOL_NAMES.includes(t.name))
+    if (writeTool) {
+      const summary = await buildActionSummary(writeTool.name, writeTool.input)
+      return NextResponse.json({
+        message: text,
+        model: modelLabel,
+        cost: roundCost(),
+        pendingAction: { tool: writeTool.name, args: writeTool.input, summary },
+      })
+    }
+
+    // Read tools → execute and feed results back
+    const toolResults: Anthropic.ToolResultBlockParam[] = []
+    for (const tu of toolUses) {
+      if (!READ_TOOL_NAMES.includes(tu.name)) continue
+      const result = await executeReadTool(tu.name, tu.input)
+      toolResults.push({ type: 'tool_result', tool_use_id: tu.id, content: JSON.stringify(result) })
+    }
+
+    convo.push({ role: 'assistant', content: response.content })
+    convo.push({ role: 'user', content: toolResults })
+  }
+
+  return NextResponse.json({
+    message: 'Não consegui concluir a solicitação em tempo hábil. Tente reformular ou detalhar melhor o pedido.',
+    model: modelLabel,
+    cost: roundCost(),
+  })
 }
