@@ -43,7 +43,8 @@ export const DATA_KEY_DESCRIPTIONS: Record<string, string> = {
   saeb_media_geral: 'Média geral dos alunos no SAEB. Params opcionais: area (ex: "Língua Portuguesa"), classId',
   saeb_nivel_distribuicao: 'Distribuição de alunos por nível SAEB (Adequado / Básico / Abaixo do Básico). Params opcionais: area, classId',
   saeb_por_descritor: 'Desempenho por descritor SAEB. Params opcionais: area, classId. Retorna lista com média por descritor',
-  saeb_alunos_abaixo: 'Lista de alunos com nível Abaixo do Básico no SAEB. Params opcionais: area, classId',
+  saeb_alunos_abaixo: 'Apenas a CONTAGEM de descritores abaixo do básico por aluno (lista resumida). Params opcionais: area, classId',
+  saeb_alunos_abaixo_media: 'Tabela detalhada: cada aluno, QUAIS descritores ele está abaixo da média da turma, e a média de desempenho do aluno. Use quando o pedido quer ver o aluno + os descritores + a média. Params opcionais: area, classId',
   enem_media_por_competencia: 'Média por competência ENEM. Params opcionais: classId',
   enem_ranking_alunos: 'Ranking de alunos por pontuação média ENEM. Params opcionais: classId',
   notas_media_turma: 'Média de notas por disciplina/avaliação. Params opcionais: classId, subjectId',
@@ -151,6 +152,50 @@ async function getSaebAlunosAbaixo(params: Params, ctx: UserContext): Promise<Wi
     .map(s => ({ name: s.name, value: `${s.count} descritor(es)`, badge: 'Atenção', badgeColor: 'red' }))
 
   return { type: 'LIST', data: items }
+}
+
+// Per-student breakdown: which descriptors a student is below the cohort average on,
+// plus the student's overall SAEB average. Answers "qual aluno está abaixo da média
+// nos descritores, com o aluno, os descritores e a média do aluno".
+async function getSaebAlunosAbaixoMedia(params: Params, ctx: UserContext): Promise<WidgetData> {
+  const where = applyStudentScope({}, ctx, params.classId)
+  if (params.area) (where as any).descriptor = { area: params.area }
+
+  const perfs = await prisma.studentSaebPerformance.findMany({
+    where,
+    include: { student: true, descriptor: true },
+  })
+
+  // Cohort mean per descriptor
+  const descAgg: Record<string, { sum: number; count: number }> = {}
+  for (const p of perfs) {
+    const code = p.descriptor.code
+    if (!descAgg[code]) descAgg[code] = { sum: 0, count: 0 }
+    descAgg[code].sum += p.score
+    descAgg[code].count++
+  }
+  const descMean: Record<string, number> = {}
+  for (const [code, a] of Object.entries(descAgg)) descMean[code] = a.sum / a.count
+
+  // Per student: descriptors scored below the cohort mean + overall average
+  const byStudent: Record<string, { name: string; below: string[]; scores: number[] }> = {}
+  for (const p of perfs) {
+    if (!byStudent[p.studentId]) byStudent[p.studentId] = { name: p.student.name, below: [], scores: [] }
+    const s = byStudent[p.studentId]
+    s.scores.push(p.score)
+    if (p.score < descMean[p.descriptor.code]) s.below.push(p.descriptor.code)
+  }
+
+  const rows = Object.values(byStudent)
+    .filter(s => s.below.length > 0)
+    .map(s => ({ name: s.name, below: s.below, avg: s.scores.reduce((a, b) => a + b, 0) / s.scores.length }))
+    .sort((a, b) => a.avg - b.avg || b.below.length - a.below.length)
+    .map(s => [s.name, s.below.join(', '), s.avg.toFixed(1)] as (string | number)[])
+
+  return {
+    type: 'TABLE',
+    data: { headers: ['Aluno', 'Descritores abaixo da média', 'Média do aluno'], rows },
+  }
 }
 
 async function getEnemMediaPorCompetencia(params: Params, ctx: UserContext): Promise<WidgetData> {
@@ -497,6 +542,7 @@ const ENGINE: Record<string, QueryFn> = {
   saeb_nivel_distribuicao: getSaebNivelDistribuicao,
   saeb_por_descritor: getSaebPorDescritor,
   saeb_alunos_abaixo: getSaebAlunosAbaixo,
+  saeb_alunos_abaixo_media: getSaebAlunosAbaixoMedia,
   enem_media_por_competencia: getEnemMediaPorCompetencia,
   enem_ranking_alunos: getEnemRankingAlunos,
   notas_media_turma: getNotasMediaTurma,
@@ -509,6 +555,32 @@ const ENGINE: Record<string, QueryFn> = {
   comparativo_turmas: getComparativoTurmas,
   total_alunos: getTotalAlunos,
   frequencia_turma: getFrequenciaTurma,
+}
+
+// Widget type each dataKey renders as — lets the dashboard generator (and the UI)
+// know the shape without running the query.
+export const DATA_KEY_WIDGET_TYPES: Record<string, WidgetType> = {
+  saeb_media_geral: 'METRIC',
+  saeb_nivel_distribuicao: 'PROGRESS_BARS',
+  saeb_por_descritor: 'TABLE',
+  saeb_alunos_abaixo: 'LIST',
+  saeb_alunos_abaixo_media: 'TABLE',
+  enem_media_por_competencia: 'TABLE',
+  enem_ranking_alunos: 'LIST',
+  notas_media_turma: 'TABLE',
+  notas_alunos_baixo_desempenho: 'LIST',
+  tarefas_adesao: 'PROGRESS_BARS',
+  tarefas_pendentes: 'LIST',
+  registros_pedagogicos: 'PROGRESS_BARS',
+  alunos_risco: 'ALERT_LIST',
+  atividade_professores: 'LIST',
+  comparativo_turmas: 'TABLE',
+  total_alunos: 'METRIC',
+  frequencia_turma: 'ALERT_LIST',
+}
+
+export function getValidDataKeys(): string[] {
+  return Object.keys(ENGINE)
 }
 
 export async function executeWidget(

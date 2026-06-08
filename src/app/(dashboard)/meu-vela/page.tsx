@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { Plus, Sparkles, LayoutDashboard, Pin, Trash2, Loader2, ChevronRight, Clock } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { formatDateTime } from '@/lib/utils'
-import { CompactDashboardConfig, BLOCK_LIBRARY } from '@/lib/dashboard-blocks'
+import { DashboardConfig } from '@/lib/dashboard-engine'
 
 interface DashboardMeta {
   id: string
@@ -37,7 +37,7 @@ export default function MeuVelaPage() {
   const [dashboards, setDashboards] = useState<DashboardMeta[]>([])
   const [prompt, setPrompt] = useState('')
   const [generating, setGenerating] = useState(false)
-  const [preview, setPreview] = useState<{ config: CompactDashboardConfig } | null>(null)
+  const [preview, setPreview] = useState<{ config: DashboardConfig } | null>(null)
   const [saving, setSaving] = useState(false)
 
   useEffect(() => { fetchDashboards() }, [])
@@ -170,13 +170,13 @@ export default function MeuVelaPage() {
             </div>
           </div>
           <div className="bg-gray-50 rounded-lg p-3">
-            <p className="text-xs font-medium text-gray-500 mb-2">Blocos que serão combinados:</p>
+            <p className="text-xs font-medium text-gray-500 mb-2">Visões que serão exibidas (dados ao vivo a cada abertura):</p>
             <div className="flex flex-wrap gap-2">
-              {preview.config.blocks.map(b => (
-                <span key={b.blockId} className="text-xs px-2.5 py-1 bg-white border rounded-full text-gray-700">
-                  {BLOCK_LIBRARY[b.blockId]?.name || b.blockId}
-                  {b.params && Object.values(b.params).length > 0 && (
-                    <span className="text-gray-400 ml-1">({Object.values(b.params).join(', ')})</span>
+              {preview.config.widgets.map((w, i) => (
+                <span key={i} className="text-xs px-2.5 py-1 bg-white border rounded-full text-gray-700">
+                  {w.title}
+                  {w.params && Object.values(w.params).length > 0 && (
+                    <span className="text-gray-400 ml-1">({Object.values(w.params).join(', ')})</span>
                   )}
                 </span>
               ))}
