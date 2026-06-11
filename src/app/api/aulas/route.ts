@@ -10,8 +10,9 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = new URL(req.url)
   const teacherId = searchParams.get('teacherId')
+  const classId = searchParams.get('classId')
 
-  let whereClause: any = { active: true }
+  let andClause: any[] = [{ active: true }]
 
   if (teacherId) {
     const teacherClasses = await prisma.teacherClass.findMany({
@@ -21,19 +22,32 @@ export async function GET(req: NextRequest) {
     const classIds = teacherClasses.map(tc => tc.classId)
     const subjectIds = teacherClasses.map(tc => tc.subjectId)
 
-    whereClause = {
-      active: true,
+    andClause.push({
       OR: [
         { subjectId: { in: subjectIds } },
-        { lessonClasses: { some: { classId: { in: classIds } } } }
+        { subjects: { some: { id: { in: subjectIds } } } },
+        {
+          AND: [
+            { subjectId: null },
+            { subjects: { none: {} } },
+            { lessonClasses: { some: { classId: { in: classIds } } } }
+          ]
+        }
       ]
-    }
+    })
+  }
+
+  if (classId) {
+    andClause.push({
+      lessonClasses: { some: { classId } }
+    })
   }
 
   const lessons = await prisma.lesson.findMany({
-    where: whereClause,
+    where: { AND: andClause },
     include: {
       subject: true,
+      subjects: true,
       lessonClasses: { include: { class: true } },
       materials: { orderBy: { order: 'asc' } },
       _count: { select: { classRecords: true, homework: true } }
@@ -51,18 +65,29 @@ export async function POST(req: NextRequest) {
   if (!['ADMIN', 'COORDENACAO', 'PROFESSOR'].includes(role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const body = await req.json()
-  const { classIds = [], materials = [], ...lessonData } = body
+  const { classIds = [], subjectIds = [], materials = [], ...lessonData } = body
+
+  // Set subjectId to the first subject for backward compatibility
+  const subjectId = subjectIds.length === 1 ? subjectIds[0] : null
 
   const lesson = await prisma.lesson.create({
     data: {
       ...lessonData,
+      subjectId,
       startDate: lessonData.startDate ? new Date(lessonData.startDate) : undefined,
       endDate: lessonData.endDate ? new Date(lessonData.endDate) : undefined,
       createdById: (session.user as any).id,
       lessonClasses: { create: classIds.map((id: string) => ({ classId: id })) },
       materials: { create: materials },
+      subjects: {
+        connect: subjectIds.map((id: string) => ({ id }))
+      }
     },
-    include: { lessonClasses: true, materials: true },
+    include: {
+      lessonClasses: { include: { class: true } },
+      materials: true,
+      subjects: true,
+    },
   })
 
   await createAuditLog({

@@ -35,11 +35,19 @@ export default async function ProfessorPortalPage() {
       active: true,
       OR: [
         { subjectId: { in: teacherSubjectIds } },
-        { lessonClasses: { some: { classId: { in: teacherClassIds } } } }
+        { subjects: { some: { id: { in: teacherSubjectIds } } } },
+        {
+          AND: [
+            { subjectId: null },
+            { subjects: { none: {} } },
+            { lessonClasses: { some: { classId: { in: teacherClassIds } } } }
+          ]
+        }
       ]
     } : { active: true },
     include: {
       subject: true,
+      subjects: true,
       lessonClasses: { include: { class: true } },
       materials: { orderBy: { order: 'asc' } },
       homework: { where: { active: true } },
@@ -88,7 +96,15 @@ export default async function ProfessorPortalPage() {
                   <div>
                     <CardTitle className="text-base">{lesson.title}</CardTitle>
                     <div className="flex flex-wrap gap-2 mt-1">
-                      {lesson.subject && <Badge variant="outline" className="text-xs">{lesson.subject.name}</Badge>}
+                      {lesson.subjects && lesson.subjects.length > 1 ? (
+                        <Badge variant="outline" className="text-xs bg-purple-50 text-purple-700 border-purple-200">
+                          Interdisciplinar ({lesson.subjects.map(s => s.name).join(', ')})
+                        </Badge>
+                      ) : lesson.subject ? (
+                        <Badge variant="outline" className="text-xs">{lesson.subject.name}</Badge>
+                      ) : lesson.subjects && lesson.subjects.length === 1 ? (
+                        <Badge variant="outline" className="text-xs">{lesson.subjects[0].name}</Badge>
+                      ) : null}
                       {lesson.lessonClasses.map(lc => (
                         <Badge key={lc.class.name} variant="info" className="text-xs">{lc.class.name}</Badge>
                       ))}

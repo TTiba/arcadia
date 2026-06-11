@@ -508,6 +508,9 @@ async function main() {
       { type: 'VIDEO', title: 'Documentário: Planeta Água — impactos climáticos',  order: 2 },
       { type: 'LINK',  title: 'IBGE — Saneamento básico por município',            order: 3 },
     ] },
+    subjects: {
+      connect: [{ id: subMat.id }, { id: subCien.id }, { id: subPort.id }]
+    }
   } })
 
   await prisma.classRecord.createMany({ data: [
@@ -535,6 +538,94 @@ async function main() {
       observations: 'A interdisciplinaridade foi muito bem recebida. Alunos usaram os dados do Carlos (porcentagens) para embasar argumentos nas cartas e mencionaram o experimento de filtração do Felipe. O nível argumentativo foi superior ao habitual — o tema real fez diferença. Três alunos produziram textos excepcionais; sugeri publicação no jornal escolar. Dois alunos ainda confundem fato e opinião.',
       pending: 'Finalizamos a estrutura da carta argumentativa. Próxima aula LP: reescrita com foco em conectivos e progressão temática. As melhores cartas serão apresentadas na Semana do Meio Ambiente — evento conjunto das três disciplinas em junho.',
     },
+  ] })
+
+  // ─── New interdisciplinary lessons for presentation ──────────────────────────
+  console.log('  Creating presentation interdisciplinary lessons...')
+  const lessonEst = await prisma.lesson.create({ data: {
+    title: 'Estatística e Opinião: Análise de Redes Sociais',
+    description: 'Estudo estatístico integrado à análise crítica de artigos de opinião sobre o impacto das redes sociais na juventude.',
+    startDate: new Date(2024, 5, 1), endDate: new Date(2024, 5, 10),
+    lessonClasses: { create: [{ classId: cls(A,'9','A').id }] },
+    subjects: {
+      connect: [{ id: subMat.id }, { id: subPort.id }]
+    }
+  } })
+
+  const lessonClima = await prisma.lesson.create({ data: {
+    title: 'Mudanças Climáticas e Impacto na Agricultura do Paraná',
+    description: 'Análise de dados climáticos e seus efeitos na produtividade agrícola paranaense, unindo conceitos geográficos e biológicos.',
+    startDate: new Date(2024, 5, 5), endDate: new Date(2024, 5, 15),
+    lessonClasses: { create: [{ classId: cls(A,'9','A').id }] },
+  } })
+  await prisma.lesson.update({
+    where: { id: lessonClima.id },
+    data: {
+      subjects: {
+        connect: [{ id: subCien.id }, { id: subGeo.id }]
+      }
+    }
+  })
+
+  const lessonProp = await prisma.lesson.create({ data: {
+    title: 'A Propaganda de Guerra e a Opinião Pública',
+    description: 'Análise crítica dos discursos e cartazes de propaganda na Segunda Guerra Mundial, integrando interpretação textual e contexto histórico.',
+    startDate: new Date(2024, 5, 10), endDate: new Date(2024, 5, 20),
+    lessonClasses: { create: [{ classId: cls(A,'9','A').id }] },
+  } })
+  await prisma.lesson.update({
+    where: { id: lessonProp.id },
+    data: {
+      subjects: {
+        connect: [{ id: subHist.id }, { id: subPort.id }, { id: subGeo.id }, { id: subCien.id }]
+      }
+    }
+  })
+
+  // Insert records for these presentation lessons
+  await prisma.classRecord.createMany({ data: [
+    {
+      lessonId: lessonEst.id, classId: cls(A,'9','A').id,
+      teacherId: A.tchMat.id, subjectId: subMat.id, userId: A.tMatU.id,
+      date: new Date(2024, 5, 2),
+      contentDeveloped: 'Coleta de dados brutos sobre o tempo de uso diário de redes sociais entre os alunos da turma. Construção de tabelas de frequência absoluta e relativa, seguidas pela elaboração de gráficos de barras no plano cartesiano.',
+      observations: 'Os alunos demonstraram facilidade em converter minutos em porcentagens. Alguns grupos precisaram de auxílio na escala do eixo vertical do gráfico.',
+      pending: 'Ficou pendente o cálculo das medidas de tendência central (média, mediana e moda) que será feito na próxima aula.'
+    },
+    {
+      lessonId: lessonClima.id, classId: cls(A,'9','A').id,
+      teacherId: A.tchGeo.id, subjectId: subGeo.id, userId: A.tGeoU.id,
+      date: new Date(2024, 5, 6),
+      contentDeveloped: 'Mapeamento das microrregiões produtoras de soja e milho no Paraná utilizando o Atlas Geográfico Escolar. Análise de gráficos de pluviosidade histórica da Região Metropolitana de Curitiba e do Norte do estado nos últimos 5 anos.',
+      observations: 'A correlação entre áreas de seca e queda na produção foi facilmente identificada pela turma. Boa leitura cartográfica geral.',
+      pending: 'Concluir a discussão sobre migrações forçadas causadas por eventos climáticos extremos.'
+    },
+    {
+      lessonId: lessonProp.id, classId: cls(A,'9','A').id,
+      teacherId: A.tchHist.id, subjectId: subHist.id, userId: A.tHistU.id,
+      date: new Date(2024, 5, 11),
+      contentDeveloped: 'Contextualização histórica dos aparelhos de propaganda estatal durante a Segunda Guerra Mundial, com foco na atuação do Ministério da Propaganda alemão de Goebbels e nas campanhas aliadas.',
+      observations: 'Alunos ficaram impactados com o poder de persuasão das mídias da época. Excelente debate sobre manipulação de informação.',
+      pending: 'Parei no conceito de "guerra psicológica". Próxima aula: análise dos discursos de Churchill.'
+    },
+    {
+      lessonId: lessonProp.id, classId: cls(A,'9','A').id,
+      teacherId: A.tchGeo.id, subjectId: subGeo.id, userId: A.tGeoU.id,
+      date: new Date(2024, 5, 12),
+      contentDeveloped: 'Geopolítica e expansão territorial na Segunda Guerra Mundial: análise de cartazes cartográficos russos, alemães e americanos. Estudo sobre como os mapas eram redesenhados nas propagandas para influenciar a opinião pública sobre as fronteiras.',
+      observations: 'Alunos demonstraram grande interesse na comparação dos mapas de propaganda soviéticos versus reais. Excelente fixação espacial dos conceitos de geopolítica.',
+      pending: 'Retomar na próxima aula a discussão sobre a partilha territorial polonesa e seus cartazes informativos.',
+      adaptations: 'Disponibilizado atlas tátil adaptado para o aluno com baixa visão.'
+    },
+    {
+      lessonId: lessonProp.id, classId: cls(A,'9','A').id,
+      teacherId: A.tchCien.id, subjectId: subCien.id, userId: A.tCienU.id,
+      date: new Date(2024, 5, 13),
+      contentDeveloped: 'A corrida científica e tecnológica na guerra: o papel da penicilina, do radar e da energia atômica. Análise de folhetos de propaganda militar glorificando a superioridade científica e justificando os gastos industriais de guerra.',
+      observations: 'A turma realizou reflexões profundas sobre os dilemas éticos no Projeto Manhattan. Todos conectaram muito bem a propaganda tecnológica com o contexto de História.',
+      pending: 'Discutir a destinação de resíduos e impacto ecológico pós-bombas na próxima aula.',
+      adaptations: 'Fornecido resumo do roteiro em fonte ampliada para alunos com dificuldades visuais.'
+    }
   ] })
 
   // ─── Regular lessons School A ─────────────────────────────────────────────────

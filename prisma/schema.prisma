@@ -88,6 +88,7 @@ model Subject {
   teacherSubjects TeacherSubject[]
   teacherClasses  TeacherClass[]
   lessons         Lesson[]
+  interdisciplinaryLessons Lesson[] @relation("LessonSubjects")
   assessments     Assessment[]
   homework        Homework[]
   classRecords    ClassRecord[]
@@ -295,6 +296,7 @@ model Lesson {
   updatedAt   DateTime  @updatedAt
 
   subject       Subject?        @relation(fields: [subjectId], references: [id])
+  subjects      Subject[]       @relation("LessonSubjects")
   lessonClasses LessonClass[]
   materials     LessonMaterial[]
   classRecords  ClassRecord[]

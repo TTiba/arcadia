@@ -28,6 +28,7 @@ interface Lesson {
   startDate?: string
   endDate?: string
   subject?: { name: string }
+  subjects?: { id: string; name: string }[]
   lessonClasses: { class: { name: string } }[]
   materials: Material[]
   _count?: { classRecords: number; homework: number }
@@ -50,16 +51,39 @@ export default function AulasPage() {
   const [search, setSearch] = useState('')
   const [open, setOpen] = useState(false)
   const [viewLesson, setViewLesson] = useState<Lesson | null>(null)
-  const [form, setForm] = useState({ title: '', description: '', startDate: '', endDate: '' })
+  const [allClasses, setAllClasses] = useState<any[]>([])
+  const [allSubjects, setAllSubjects] = useState<any[]>([])
+  const [form, setForm] = useState({
+    title: '',
+    description: '',
+    startDate: '',
+    endDate: '',
+    classIds: [] as string[],
+    subjectIds: [] as string[],
+  })
   const [materials, setMaterials] = useState<Material[]>([])
   const [newMaterial, setNewMaterial] = useState<Material>({ type: 'LINK', title: '', url: '' })
   const { toast } = useToast()
 
-  useEffect(() => { fetchLessons() }, [])
+  useEffect(() => {
+    fetchLessons()
+    fetchClasses()
+    fetchSubjects()
+  }, [])
 
   const fetchLessons = async () => {
     const res = await fetch('/api/aulas')
     if (res.ok) setLessons(await res.json())
+  }
+
+  const fetchClasses = async () => {
+    const res = await fetch('/api/turmas')
+    if (res.ok) setAllClasses(await res.json())
+  }
+
+  const fetchSubjects = async () => {
+    const res = await fetch('/api/subjects')
+    if (res.ok) setAllSubjects(await res.json())
   }
 
   const addMaterial = () => {
@@ -77,7 +101,7 @@ export default function AulasPage() {
     if (res.ok) {
       toast({ title: 'Aula cadastrada!' })
       setOpen(false)
-      setForm({ title: '', description: '', startDate: '', endDate: '' })
+      setForm({ title: '', description: '', startDate: '', endDate: '', classIds: [], subjectIds: [] })
       setMaterials([])
       fetchLessons()
     } else {
@@ -94,7 +118,7 @@ export default function AulasPage() {
           <h1 className="text-2xl font-bold flex items-center gap-2"><BookOpen className="h-6 w-6" /> Aulas</h1>
           <p className="text-muted-foreground text-sm">{lessons.length} aulas cadastradas</p>
         </div>
-        <Button onClick={() => { setForm({ title: '', description: '', startDate: '', endDate: '' }); setMaterials([]); setOpen(true) }}>
+        <Button onClick={() => { setForm({ title: '', description: '', startDate: '', endDate: '', classIds: [], subjectIds: [] }); setMaterials([]); setOpen(true) }}>
           <Plus className="h-4 w-4 mr-2" /> Nova Aula
         </Button>
       </div>
@@ -116,7 +140,17 @@ export default function AulasPage() {
                   <Eye className="h-3.5 w-3.5" />
                 </Button>
               </div>
-              {lesson.subject && <Badge variant="outline" className="w-fit text-xs">{lesson.subject.name}</Badge>}
+              {lesson.subjects && lesson.subjects.length > 1 ? (
+                <Badge variant="outline" className="w-fit text-xs bg-purple-50 text-purple-700 border-purple-200">
+                  Interdisciplinar ({lesson.subjects.map(s => s.name).join(', ')})
+                </Badge>
+              ) : lesson.subject ? (
+                <Badge variant="outline" className="w-fit text-xs">{lesson.subject.name}</Badge>
+              ) : lesson.subjects && lesson.subjects.length === 1 ? (
+                <Badge variant="outline" className="w-fit text-xs">{lesson.subjects[0].name}</Badge>
+              ) : (
+                <Badge variant="outline" className="w-fit text-xs bg-gray-50 text-gray-500">Sem Componente</Badge>
+              )}
             </CardHeader>
             <CardContent className="space-y-2">
               {lesson.description && <p className="text-xs text-muted-foreground line-clamp-2">{lesson.description}</p>}
@@ -174,6 +208,54 @@ export default function AulasPage() {
                   <Input type="date" value={form.endDate} onChange={e => setForm({ ...form, endDate: e.target.value })} />
                 </div>
               </div>
+
+              {/* Class selector */}
+              <div className="space-y-2">
+                <Label>Turmas *</Label>
+                <div className="grid grid-cols-2 gap-2 p-3 border rounded-md max-h-40 overflow-y-auto bg-background">
+                  {allClasses.map((c: any) => (
+                    <label key={c.id} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-muted/50 p-1 rounded">
+                      <input
+                        type="checkbox"
+                        checked={form.classIds.includes(c.id)}
+                        onChange={e => {
+                          const checked = e.target.checked
+                          setForm(prev => ({
+                            ...prev,
+                            classIds: checked ? [...prev.classIds, c.id] : prev.classIds.filter(id => id !== c.id)
+                          }))
+                        }}
+                        className="rounded border-gray-300 text-primary focus:ring-primary h-4 w-4"
+                      />
+                      {c.name}
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Subject selector */}
+              <div className="space-y-2">
+                <Label>Componentes Curriculares (Selecione 2 ou mais para Interdisciplinar) *</Label>
+                <div className="grid grid-cols-2 gap-2 p-3 border rounded-md max-h-40 overflow-y-auto bg-background">
+                  {allSubjects.map((s: any) => (
+                    <label key={s.id} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-muted/50 p-1 rounded">
+                      <input
+                        type="checkbox"
+                        checked={form.subjectIds.includes(s.id)}
+                        onChange={e => {
+                          const checked = e.target.checked
+                          setForm(prev => ({
+                            ...prev,
+                            subjectIds: checked ? [...prev.subjectIds, s.id] : prev.subjectIds.filter(id => id !== s.id)
+                          }))
+                        }}
+                        className="rounded border-gray-300 text-primary focus:ring-primary h-4 w-4"
+                      />
+                      {s.name}
+                    </label>
+                  ))}
+                </div>
+              </div>
             </TabsContent>
             <TabsContent value="materiais" className="pt-4 space-y-4">
               <div className="p-4 border rounded-lg space-y-3 bg-muted/30">
@@ -216,7 +298,7 @@ export default function AulasPage() {
           </Tabs>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
-            <Button onClick={handleSave} disabled={!form.title}>Salvar</Button>
+            <Button onClick={handleSave} disabled={!form.title || form.classIds.length === 0 || form.subjectIds.length === 0}>Salvar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -227,7 +309,13 @@ export default function AulasPage() {
           <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>{viewLesson.title}</DialogTitle>
-              {viewLesson.subject && <p className="text-sm text-muted-foreground">{viewLesson.subject.name}</p>}
+              {viewLesson.subjects && viewLesson.subjects.length > 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  Componentes: {viewLesson.subjects.map(s => s.name).join(', ')}
+                </p>
+              ) : viewLesson.subject ? (
+                <p className="text-sm text-muted-foreground">{viewLesson.subject.name}</p>
+              ) : null}
             </DialogHeader>
             {viewLesson.description && <p className="text-sm text-muted-foreground">{viewLesson.description}</p>}
             <div className="space-y-4">

@@ -11,15 +11,68 @@ export async function GET(req: NextRequest) {
   const classId = searchParams.get('classId')
   const subjectId = searchParams.get('subjectId')
   const teacherId = searchParams.get('teacherId')
+  const lessonId = searchParams.get('lessonId')
+
+  const role = (session.user as any).role
+  const userId = (session.user as any).id
+
+  let andClause: any[] = []
+
+  if (role === 'PROFESSOR') {
+    const teacher = await prisma.teacher.findUnique({
+      where: { userId },
+      include: { teacherClasses: true }
+    })
+
+    if (teacher) {
+      const classIds = teacher.teacherClasses.map(tc => tc.classId)
+      const subjectIds = teacher.teacherClasses.map(tc => tc.subjectId)
+
+      andClause.push({
+        OR: [
+          {
+            classId: { in: classIds },
+            subjectId: { in: subjectIds }
+          },
+          {
+            lesson: {
+              OR: [
+                { subjectId: { in: subjectIds } },
+                { subjects: { some: { id: { in: subjectIds } } } },
+                {
+                  AND: [
+                    { subjectId: null },
+                    { subjects: { none: {} } }
+                  ]
+                }
+              ],
+              lessonClasses: { some: { classId: { in: classIds } } }
+            }
+          }
+        ]
+      })
+    } else {
+      return NextResponse.json([])
+    }
+  }
+
+  if (teacherId) {
+    andClause.push({ teacherId })
+  }
+  if (classId) {
+    andClause.push({ classId })
+  }
+  if (subjectId) {
+    andClause.push({ subjectId })
+  }
+  if (lessonId) {
+    andClause.push({ lessonId })
+  }
 
   const records = await prisma.classRecord.findMany({
-    where: {
-      ...(classId ? { classId } : {}),
-      ...(subjectId ? { subjectId } : {}),
-      ...(teacherId ? { teacherId } : {}),
-    },
+    where: andClause.length > 0 ? { AND: andClause } : {},
     include: {
-      lesson: true,
+      lesson: { include: { subjects: true } },
       class: true,
       teacher: { include: { user: true } },
       subject: true,
@@ -37,7 +90,23 @@ export async function POST(req: NextRequest) {
   if (!['ADMIN', 'PROFESSOR'].includes(role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const body = await req.json()
-  const { lessonId, classId, teacherId, subjectId, date, contentDeveloped, observations, pending, adaptations } = body
+  const { id, lessonId, classId, teacherId, subjectId, date, contentDeveloped, observations, pending, adaptations } = body
+
+  if (id) {
+    const record = await prisma.classRecord.update({
+      where: { id },
+      data: {
+        lessonId, classId, teacherId, subjectId,
+        date: new Date(date),
+        contentDeveloped, observations, pending, adaptations,
+      },
+      include: {
+        lesson: true, class: true,
+        teacher: { include: { user: true } }, subject: true,
+      }
+    })
+    return NextResponse.json(record)
+  }
 
   const record = await prisma.classRecord.create({
     data: {
