@@ -33,7 +33,7 @@ interface Student {
   observations?: string
   medicalInfo?: string
   classId?: string
-  class?: { id: string; name: string; grade?: { name: string; segment?: { name: string } } }
+  class?: { id: string; name: string; grade?: { name: string; segment?: { name: string } }; school?: { id: string; name: string } }
   guardians: Guardian[]
   gradeRecords?: GradeRecord[]
   homeworkSubmissions?: { id: string; homework: { subject: { id: string; name: string } } }[]
@@ -60,7 +60,7 @@ interface StudentLog {
 }
 
 interface ClassOption {
-  id: string; name: string; grade?: { name: string }
+  id: string; name: string; grade?: { name: string }; school?: { id: string; name: string }
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -341,12 +341,21 @@ export default function AlunosPage() {
   const [classes, setClasses] = useState<ClassOption[]>([])
   const [search, setSearch] = useState('')
   const [filterStatus, setFilterStatus] = useState('')
+  const [filterSchool, setFilterSchool] = useState('')
   const [open, setOpen] = useState(false)
   const [viewOpen, setViewOpen] = useState(false)
   const [selected, setSelected] = useState<Student | null>(null)
   const [form, setForm] = useState(DEFAULT_FORM)
   const [guardians, setGuardians] = useState([{ ...DEFAULT_GUARDIAN }])
   const { toast } = useToast()
+
+  const schools = Array.from(
+    new Map(
+      classes
+        .map(c => c.school ? [c.school.id, c.school] : null)
+        .filter(Boolean) as any
+    ).values()
+  ) as any[]
 
   useEffect(() => { fetchStudents(); fetchClasses() }, [])
 
@@ -404,7 +413,8 @@ export default function AlunosPage() {
       s.enrollment.includes(search) ||
       (s.cgm || '').includes(search)
     const matchStatus = !filterStatus || s.status === filterStatus
-    return matchSearch && matchStatus
+    const matchSchool = !filterSchool || s.class?.school?.id === filterSchool
+    return matchSearch && matchStatus && matchSchool
   })
 
   const addGuardian = () => setGuardians(g => [...g, { ...DEFAULT_GUARDIAN }])
@@ -431,6 +441,18 @@ export default function AlunosPage() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input placeholder="Buscar por nome, matrícula ou CGM..." className="pl-9" value={search} onChange={e => setSearch(e.target.value)} />
         </div>
+        {schools.length > 0 && (
+          <select
+            className="flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+            value={filterSchool}
+            onChange={e => setFilterSchool(e.target.value)}
+          >
+            <option value="">Todas as escolas</option>
+            {schools.map(sch => (
+              <option key={sch.id} value={sch.id}>{sch.name}</option>
+            ))}
+          </select>
+        )}
         <select
           className="flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
           value={filterStatus}
@@ -439,8 +461,8 @@ export default function AlunosPage() {
           <option value="">Todos os status</option>
           {STATUS_OPTS.map(s => <option key={s} value={s}>{STATUS_LABELS[s] || s}</option>)}
         </select>
-        {(search || filterStatus) && (
-          <Button variant="ghost" size="sm" onClick={() => { setSearch(''); setFilterStatus('') }}>
+        {(search || filterStatus || filterSchool) && (
+          <Button variant="ghost" size="sm" onClick={() => { setSearch(''); setFilterStatus(''); setFilterSchool('') }}>
             Limpar
           </Button>
         )}
@@ -473,7 +495,7 @@ export default function AlunosPage() {
                   </TableCell>
                   <TableCell className="text-sm font-mono">{s.enrollment}</TableCell>
                   <TableCell className="text-sm font-mono text-muted-foreground">{s.cgm || '-'}</TableCell>
-                  <TableCell>{s.class ? `${s.class.grade?.name || ''} ${s.class.name}`.trim() : '-'}</TableCell>
+                  <TableCell>{s.class ? s.class.name : '-'}</TableCell>
                   <TableCell>
                     <Badge variant={STATUS_BADGE[s.status] || 'secondary'}>{STATUS_LABELS[s.status] || s.status}</Badge>
                   </TableCell>
@@ -655,7 +677,7 @@ export default function AlunosPage() {
                   <div>
                     <DialogTitle className="text-lg">{selected.name}</DialogTitle>
                     <p className="text-sm text-muted-foreground">
-                      {selected.class?.grade?.name ? `${selected.class.grade.name} · ` : ''}{selected.class?.name || 'Sem turma'}
+                      {selected.class?.name || 'Sem turma'}
                     </p>
                     <Badge variant={STATUS_BADGE[selected.status] || 'secondary'} className="mt-0.5">
                       {STATUS_LABELS[selected.status] || selected.status}
@@ -682,7 +704,7 @@ export default function AlunosPage() {
                     <InfoField label="Nascimento" value={formatDate(selected.birthDate)} />
                     <InfoField label="Telefone" value={selected.phone} />
                     <InfoField label="E-mail" value={selected.email} />
-                    <InfoField label="Turma" value={selected.class ? `${selected.class.grade?.name || ''} ${selected.class.name}`.trim() : undefined} />
+                    <InfoField label="Turma" value={selected.class ? selected.class.name : undefined} />
                   </div>
                   {selected.address && (
                     <div className="mt-3">

@@ -21,12 +21,27 @@ export async function GET() {
   if (!session) return NextResponse.json([])
   const userId = (session.user as any).id
   const role   = (session.user as any).role
+  const userEmail = session.user?.email || ''
 
   const allowedRoles = ALLOW_SEND[role] ?? []
   if (allowedRoles.length === 0) return NextResponse.json([])
 
+  let schoolWhere = {}
+  if (role !== 'ADMIN' && role !== 'DIRETOR') {
+    if (userEmail.includes('eeteixeira')) {
+      schoolWhere = { email: { contains: 'eeteixeira' } }
+    } else if (userEmail.includes('eemlobato')) {
+      schoolWhere = { email: { contains: 'eemlobato' } }
+    }
+  }
+
   const contacts = await prisma.user.findMany({
-    where: { role: { in: allowedRoles }, id: { not: userId }, active: true },
+    where: {
+      role: { in: allowedRoles },
+      id: { not: userId },
+      active: true,
+      ...schoolWhere,
+    },
     select: { id: true, name: true, role: true, email: true },
     orderBy: [{ role: 'asc' }, { name: 'asc' }],
   })

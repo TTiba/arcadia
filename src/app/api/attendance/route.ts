@@ -15,6 +15,28 @@ export async function GET(req: NextRequest) {
 
   if (!classId) return NextResponse.json({ error: 'classId required' }, { status: 400 })
 
+  const role = (session.user as any).role
+  const userEmail = session.user?.email || ''
+
+  if (role !== 'ADMIN' && role !== 'DIRETOR') {
+    let schoolWhere = {}
+    if (userEmail.includes('eeteixeira')) {
+      schoolWhere = { school: { name: { contains: 'Anísio Teixeira' } } }
+    } else if (userEmail.includes('eemlobato')) {
+      schoolWhere = { school: { name: { contains: 'Monteiro Lobato' } } }
+    }
+
+    const classExists = await prisma.class.findFirst({
+      where: {
+        id: classId,
+        ...schoolWhere
+      }
+    })
+    if (!classExists) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+  }
+
   const date = dateStr ? new Date(dateStr) : new Date()
   date.setHours(0, 0, 0, 0)
   const nextDay = new Date(date)
@@ -50,7 +72,7 @@ export async function GET(req: NextRequest) {
 
 // POST /api/attendance
 // Body: { classId, date, absences: [studentId, ...] }
-// Creates FALTA records for the listed students; removes any stale records for others
+// Creates StudentAttendance records for all students in the class; removes any stale records for others
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -65,6 +87,27 @@ export async function POST(req: NextRequest) {
 
   if (!classId || !dateStr) return NextResponse.json({ error: 'classId and date required' }, { status: 400 })
 
+  const userEmail = session.user?.email || ''
+
+  if (role !== 'ADMIN' && role !== 'DIRETOR') {
+    let schoolWhere = {}
+    if (userEmail.includes('eeteixeira')) {
+      schoolWhere = { school: { name: { contains: 'Anísio Teixeira' } } }
+    } else if (userEmail.includes('eemlobato')) {
+      schoolWhere = { school: { name: { contains: 'Monteiro Lobato' } } }
+    }
+
+    const classExists = await prisma.class.findFirst({
+      where: {
+        id: classId,
+        ...schoolWhere
+      }
+    })
+    if (!classExists) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+  }
+
   const date = new Date(dateStr)
   date.setHours(0, 0, 0, 0)
   const nextDay = new Date(date)
@@ -72,16 +115,25 @@ export async function POST(req: NextRequest) {
 
   const userId = (session.user as any).id
 
+  // Fetch all active students in this class
+  const students = await prisma.student.findMany({
+    where: { classId, status: 'ATIVO' },
+    select: { id: true }
+  })
+
   // Delete existing records for this class on this date, then re-create
   await prisma.studentAttendance.deleteMany({
     where: { classId, date: { gte: date, lt: nextDay } },
   })
 
-  if (absences.length > 0) {
+  if (students.length > 0) {
+    const absenceSet = new Set(absences)
     await prisma.studentAttendance.createMany({
-      data: absences.map((studentId: string) => ({
-        studentId, classId, date,
-        status: 'FALTA',
+      data: students.map((s) => ({
+        studentId: s.id,
+        classId,
+        date,
+        status: absenceSet.has(s.id) ? 'FALTA' : 'PRESENTE',
         recordedBy: userId,
       })),
     })

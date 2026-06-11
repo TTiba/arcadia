@@ -11,6 +11,28 @@ export async function GET(req: NextRequest) {
   const assessmentId = searchParams.get('assessmentId')
   if (!assessmentId) return NextResponse.json({ error: 'assessmentId required' }, { status: 400 })
 
+  const role = (session.user as any).role
+  const userEmail = session.user?.email || ''
+
+  if (role !== 'ADMIN' && role !== 'DIRETOR') {
+    let schoolWhere = {}
+    if (userEmail.includes('eeteixeira')) {
+      schoolWhere = { class: { school: { name: { contains: 'Anísio Teixeira' } } } }
+    } else if (userEmail.includes('eemlobato')) {
+      schoolWhere = { class: { school: { name: { contains: 'Monteiro Lobato' } } } }
+    }
+
+    const assessmentExists = await prisma.assessment.findFirst({
+      where: {
+        id: assessmentId,
+        ...schoolWhere
+      }
+    })
+    if (!assessmentExists) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+  }
+
   const records = await prisma.gradeRecord.findMany({
     where: { assessmentId },
     include: { student: true, teacher: { include: { user: true } } },

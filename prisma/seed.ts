@@ -106,14 +106,17 @@ async function main() {
   await prisma.teacher.deleteMany()
   await prisma.user.deleteMany()
   await prisma.class.deleteMany()
+  await prisma.gradeSubject.deleteMany()
   await prisma.subject.deleteMany()
   await prisma.grade.deleteMany()
   await prisma.segment.deleteMany()
   await prisma.school.deleteMany()
   await prisma.userDashboard.deleteMany()
   await prisma.dashboardBlock.deleteMany()
+  await prisma.curriculumSaebDescriptor.deleteMany()
   await prisma.saebDescriptor.deleteMany()
   await prisma.enemCompetency.deleteMany()
+  await prisma.curriculum.deleteMany()
 
   // ─── SAEB Descriptors ─────────────────────────────────────────────────────────
   const [lp9D9, lp9D10, lp9D14, mt9D22, mt9D24, mt9D26, mt9D28] = await Promise.all([
@@ -147,6 +150,11 @@ async function main() {
     prisma.enemCompetency.create({ data: { code: 'MT-C2', description: 'Utilizar conhecimento geométrico para leitura e representação da realidade', area: 'Matemática e suas Tecnologias', type: 'COMPETENCIA' } }),
   ])
 
+  // ─── Curricula ───────────────────────────────────────────────────────────────
+  const currBNCC = await prisma.curriculum.create({ data: { name: 'BNCC (Base Nacional Comum Curricular)', description: 'Currículo nacional padrão para todas as séries.' } })
+  const currProf = await prisma.curriculum.create({ data: { name: 'Ensino Médio - Profissionalizante', description: 'Currículo integrado com foco técnico e profissionalizante.' } })
+  const currGeral = await prisma.curriculum.create({ data: { name: 'Quadro Geral', description: 'Currículo geral para turmas regulares.' } })
+
   // ─── Segments / Grades / Subjects ────────────────────────────────────────────
   const segFundI  = await prisma.segment.create({ data: { name: 'Ensino Fundamental I'  } })
   const segFundII = await prisma.segment.create({ data: { name: 'Ensino Fundamental II' } })
@@ -167,8 +175,67 @@ async function main() {
     prisma.subject.create({ data: { name: 'Geografia' } }),
   ])
 
+  // ─── GradeSubject Matrix (for BNCC) ──────────────────────────────────────────
+  const bnccGradeSubjects = [
+    // 5º Ano
+    { curriculumId: currBNCC.id, gradeId: grades.g5.id, subjectId: subPort.id, weeklyHours: 5, order: 0 },
+    { curriculumId: currBNCC.id, gradeId: grades.g5.id, subjectId: subMat.id,  weeklyHours: 5, order: 1 },
+    // 6º Ano
+    { curriculumId: currBNCC.id, gradeId: grades.g6.id, subjectId: subPort.id, weeklyHours: 5, order: 0 },
+    { curriculumId: currBNCC.id, gradeId: grades.g6.id, subjectId: subMat.id,  weeklyHours: 5, order: 1 },
+    { curriculumId: currBNCC.id, gradeId: grades.g6.id, subjectId: subCien.id, weeklyHours: 3, order: 2 },
+    { curriculumId: currBNCC.id, gradeId: grades.g6.id, subjectId: subHist.id, weeklyHours: 3, order: 3 },
+    { curriculumId: currBNCC.id, gradeId: grades.g6.id, subjectId: subGeo.id,  weeklyHours: 3, order: 4 },
+    // 7º Ano
+    { curriculumId: currBNCC.id, gradeId: grades.g7.id, subjectId: subPort.id, weeklyHours: 5, order: 0 },
+    { curriculumId: currBNCC.id, gradeId: grades.g7.id, subjectId: subMat.id,  weeklyHours: 5, order: 1 },
+    { curriculumId: currBNCC.id, gradeId: grades.g7.id, subjectId: subCien.id, weeklyHours: 3, order: 2 },
+    { curriculumId: currBNCC.id, gradeId: grades.g7.id, subjectId: subHist.id, weeklyHours: 3, order: 3 },
+    { curriculumId: currBNCC.id, gradeId: grades.g7.id, subjectId: subGeo.id,  weeklyHours: 3, order: 4 },
+    // 8º Ano
+    { curriculumId: currBNCC.id, gradeId: grades.g8.id, subjectId: subPort.id, weeklyHours: 5, order: 0 },
+    { curriculumId: currBNCC.id, gradeId: grades.g8.id, subjectId: subMat.id,  weeklyHours: 5, order: 1 },
+    { curriculumId: currBNCC.id, gradeId: grades.g8.id, subjectId: subCien.id, weeklyHours: 3, order: 2 },
+    { curriculumId: currBNCC.id, gradeId: grades.g8.id, subjectId: subHist.id, weeklyHours: 3, order: 3 },
+    { curriculumId: currBNCC.id, gradeId: grades.g8.id, subjectId: subGeo.id,  weeklyHours: 3, order: 4 },
+    // 9º Ano
+    { curriculumId: currBNCC.id, gradeId: grades.g9.id, subjectId: subPort.id, weeklyHours: 5, order: 0 },
+    { curriculumId: currBNCC.id, gradeId: grades.g9.id, subjectId: subMat.id,  weeklyHours: 5, order: 1 },
+    { curriculumId: currBNCC.id, gradeId: grades.g9.id, subjectId: subCien.id, weeklyHours: 3, order: 2 },
+    { curriculumId: currBNCC.id, gradeId: grades.g9.id, subjectId: subHist.id, weeklyHours: 3, order: 3 },
+    { curriculumId: currBNCC.id, gradeId: grades.g9.id, subjectId: subGeo.id,  weeklyHours: 3, order: 4 },
+  ]
+  await prisma.gradeSubject.createMany({ data: bnccGradeSubjects })
+
+  // ─── Link SAEB Descriptors to Subject and Grade ──────────────────────────────
+  const allDbSaebDescs = await prisma.saebDescriptor.findMany()
+  const dbSubjects = await prisma.subject.findMany()
+  const dbGrades = await prisma.grade.findMany()
+  for (const desc of allDbSaebDescs) {
+    const matchedSubject = dbSubjects.find(s => s.name.toLowerCase() === desc.area.toLowerCase())
+    const matchedGrade = dbGrades.find(g => g.name.toLowerCase() === desc.level.toLowerCase())
+    if (matchedSubject || matchedGrade) {
+      await prisma.saebDescriptor.update({
+        where: { id: desc.id },
+        data: {
+          subjectId: matchedSubject?.id ?? null,
+          gradeId: matchedGrade?.id ?? null,
+        }
+      })
+    }
+  }
+
+  // Link all descriptors to BNCC curriculum by default
+  const relations = allDbSaebDescs.map(desc => ({
+    curriculumId: currBNCC.id,
+    saebDescriptorId: desc.id,
+  }))
+  await prisma.curriculumSaebDescriptor.createMany({ data: relations })
+
   // ─── Secretaria de Educação ───────────────────────────────────────────────────
   await prisma.user.create({ data: { name: 'Secretaria de Educação do Paraná', email: 'secretaria@seduc.pr.gov.br', password: hash('seduc2024'), role: 'VISUALIZACAO' } })
+  // ─── Administrador Geral ───────────────────────────────────────────────────────
+  await prisma.user.create({ data: { name: 'Administrador', email: 'adm@adm.com.br', password: hash('admin123'), role: 'ADMIN' } })
 
   // ─── Factory: create one complete school ─────────────────────────────────────
   type TeacherCfg = { name: string; email: string; reg: string; bio: string }
@@ -185,7 +252,7 @@ async function main() {
     idxOff: number // name index offset
   }) {
     const school = await prisma.school.create({ data: { name: cfg.name, address: cfg.address, email: cfg.email } })
-    await prisma.user.create({ data: { name: cfg.dir.name,   email: cfg.dir.email,   password: hash('admin123'), role: 'ADMIN'       } })
+    await prisma.user.create({ data: { name: cfg.dir.name,   email: cfg.dir.email,   password: hash('diretor123'), role: 'DIRETOR'       } })
     await prisma.user.create({ data: { name: cfg.coord.name, email: cfg.coord.email, password: hash('coord123'), role: 'COORDENACAO' } })
     const pedUser = await prisma.user.create({ data: { name: cfg.ped.name, email: cfg.ped.email, password: hash('ped123'), role: 'PEDAGOGO' } })
 
@@ -219,7 +286,7 @@ async function main() {
         const cls = await prisma.class.create({ data: {
           name: `${g.code}º Ano ${letter}`, gradeId: g.grade.id, schoolId: school.id,
           shift: ['A','B'].includes(letter) ? 'Manhã' : 'Tarde',
-          year: 2024, curriculum: 'BNCC 2024', period: '2024',
+          year: 2024, curriculumId: currBNCC.id, period: '2024',
         } })
         allClasses.push({ id: cls.id, code: g.code, letter, fundII: g.fundII, by: g.by })
       }
@@ -887,12 +954,13 @@ async function main() {
   console.log('  Full teacher diary coverage — all 10 teachers with records across multiple classes')
   console.log('  Academic history (2023) for upper-grade students')
   console.log('\n🔑 Credentials:')
+  console.log('  Administrador Geral: adm@adm.com.br / admin123')
+  console.log('  Dir. Escola A:     diretora@eeteixeira.pr.edu.br / diretor123')
+  console.log('  Dir. Escola B:     diretor@eemlobato.pr.edu.br   / diretor123')
   console.log('  Secretaria SEDUC:  secretaria@seduc.pr.gov.br    / seduc2024')
-  console.log('  Dir. Escola A:     diretora@eeteixeira.pr.edu.br / admin123')
   console.log('  Pedagoga A:        pedagoga@eeteixeira.pr.edu.br / ped123')
   console.log('  Prof. LP (A):      ana.batista@eeteixeira.pr.edu.br / prof123')
   console.log('  Prof. MT (A):      carlos.zanetti@eeteixeira.pr.edu.br / prof123')
-  console.log('  Dir. Escola B:     diretor@eemlobato.pr.edu.br   / admin123')
   console.log('  Pedagoga B:        pedagoga@eemlobato.pr.edu.br  / ped123')
 }
 

@@ -19,6 +19,11 @@ export default withAuth(
       return NextResponse.redirect(new URL('/dashboard', req.url))
     }
 
+    // Curriculo is blocked for DIRETOR role
+    if (pathname.startsWith('/admin/curriculo') && token.role === 'DIRETOR') {
+      return NextResponse.redirect(new URL('/dashboard', req.url))
+    }
+
     // Professor routes
     if (pathname.startsWith('/professor') && token.role !== 'PROFESSOR' && token.role !== 'ADMIN') {
       return NextResponse.redirect(new URL('/dashboard', req.url))

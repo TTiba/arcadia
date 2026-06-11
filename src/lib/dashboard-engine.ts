@@ -474,6 +474,8 @@ async function getAtividadeProfessores(params: Params, ctx: UserContext): Promis
   if (ctx.role === 'PROFESSOR') {
     const teacher = await prisma.teacher.findUnique({ where: { userId: ctx.userId } })
     if (teacher) where.teacherId = teacher.id
+  } else if (ctx.allowedClassIds) {
+    where.classId = { in: ctx.allowedClassIds }
   }
 
   const records = await prisma.classRecord.findMany({

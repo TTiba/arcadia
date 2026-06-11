@@ -11,15 +11,15 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  const { gradeId, subjectIds } = await req.json()
-  if (!gradeId) return NextResponse.json({ error: 'gradeId obrigatório' }, { status: 400 })
+  const { curriculumId, gradeId, subjectIds } = await req.json()
+  if (!curriculumId || !gradeId) return NextResponse.json({ error: 'curriculumId e gradeId obrigatórios' }, { status: 400 })
 
   // Delete and recreate
-  await prisma.gradeSubject.deleteMany({ where: { gradeId } })
+  await prisma.gradeSubject.deleteMany({ where: { curriculumId, gradeId } })
   if (subjectIds?.length) {
     await prisma.gradeSubject.createMany({
       data: (subjectIds as string[]).map((subjectId, i) => ({
-        gradeId, subjectId, order: i,
+        curriculumId, gradeId, subjectId, order: i,
       })),
     })
   }
@@ -35,13 +35,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  const { gradeId, subjectId, weeklyHours } = await req.json()
-  if (!gradeId || !subjectId) return NextResponse.json({ error: 'gradeId e subjectId obrigatórios' }, { status: 400 })
+  const { curriculumId, gradeId, subjectId, weeklyHours } = await req.json()
+  if (!curriculumId || !gradeId || !subjectId) return NextResponse.json({ error: 'curriculumId, gradeId e subjectId obrigatórios' }, { status: 400 })
 
   const gs = await prisma.gradeSubject.upsert({
-    where: { gradeId_subjectId: { gradeId, subjectId } },
+    where: { curriculumId_gradeId_subjectId: { curriculumId, gradeId, subjectId } },
     update: { weeklyHours: weeklyHours ?? 0 },
-    create: { gradeId, subjectId, weeklyHours: weeklyHours ?? 0 },
+    create: { curriculumId, gradeId, subjectId, weeklyHours: weeklyHours ?? 0 },
   })
 
   return NextResponse.json(gs, { status: 201 })
@@ -56,10 +56,11 @@ export async function DELETE(req: NextRequest) {
   }
 
   const { searchParams } = new URL(req.url)
+  const curriculumId = searchParams.get('curriculumId')
   const gradeId = searchParams.get('gradeId')
   const subjectId = searchParams.get('subjectId')
-  if (!gradeId || !subjectId) return NextResponse.json({ error: 'Parâmetros ausentes' }, { status: 400 })
+  if (!curriculumId || !gradeId || !subjectId) return NextResponse.json({ error: 'Parâmetros ausentes' }, { status: 400 })
 
-  await prisma.gradeSubject.delete({ where: { gradeId_subjectId: { gradeId, subjectId } } })
+  await prisma.gradeSubject.delete({ where: { curriculumId_gradeId_subjectId: { curriculumId, gradeId, subjectId } } })
   return NextResponse.json({ ok: true })
 }

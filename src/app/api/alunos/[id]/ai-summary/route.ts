@@ -14,6 +14,28 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+  const role = (session.user as any).role
+  const userEmail = session.user?.email || ''
+
+  if (role !== 'ADMIN' && role !== 'DIRETOR') {
+    let schoolWhere = {}
+    if (userEmail.includes('eeteixeira')) {
+      schoolWhere = { class: { school: { name: { contains: 'Anísio Teixeira' } } } }
+    } else if (userEmail.includes('eemlobato')) {
+      schoolWhere = { class: { school: { name: { contains: 'Monteiro Lobato' } } } }
+    }
+
+    const studentExists = await prisma.student.findFirst({
+      where: {
+        id: params.id,
+        ...schoolWhere
+      }
+    })
+    if (!studentExists) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+  }
+
   if (!process.env.ANTHROPIC_API_KEY) {
     return NextResponse.json({ error: 'Chave da API inválida. Verifique ANTHROPIC_API_KEY no .env.' }, { status: 500 })
   }

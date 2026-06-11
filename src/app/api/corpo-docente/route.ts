@@ -11,18 +11,33 @@ export async function GET(_req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+  const role = (session.user as any).role
+  const userEmail = session.user?.email || ''
+
+  let emailWhere = {}
+  if (role !== 'ADMIN' && role !== 'DIRETOR') {
+    if (userEmail.includes('eeteixeira')) {
+      emailWhere = { email: { contains: 'eeteixeira' } }
+    } else if (userEmail.includes('eemlobato')) {
+      emailWhere = { email: { contains: 'eemlobato' } }
+    }
+  }
+
   const users = await prisma.user.findMany({
-    where: { role: { in: STAFF_ROLES } },
+    where: {
+      role: { in: STAFF_ROLES },
+      ...emailWhere,
+    },
     include: {
       teacher: {
         include: {
           teacherSubjects: { include: { subject: true } },
-          teacherClasses: { include: { class: { include: { grade: true } }, subject: true } },
+          teacherClasses: { include: { class: { include: { grade: true, school: true } }, subject: true } },
           _count: { select: { classRecords: true } },
         },
       },
       userClasses: {
-        include: { class: { include: { grade: true } } },
+        include: { class: { include: { grade: true, school: true } } },
       },
     },
     orderBy: { name: 'asc' },

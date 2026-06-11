@@ -10,35 +10,64 @@ import {
 import { ROLE_LABELS } from '@/lib/utils'
 import Link from 'next/link'
 
-async function getMetrics(role: string, userId: string) {
+async function getMetrics(role: string, userId: string, userEmail: string) {
+  let schoolWhereStudent = {}
+  let schoolWhereClass = {}
+  let schoolWhereLesson = {}
+  let schoolWhereTeacher = {}
+  let schoolWhereRecord = {}
+  let schoolWherePedagogical = {}
+
+  if (role !== 'ADMIN' && role !== 'DIRETOR') {
+    if (userEmail.includes('eeteixeira')) {
+      schoolWhereStudent = { class: { school: { name: { contains: 'Anísio Teixeira' } } } }
+      schoolWhereClass = { school: { name: { contains: 'Anísio Teixeira' } } }
+      schoolWhereLesson = { lessonClasses: { some: { class: { school: { name: { contains: 'Anísio Teixeira' } } } } } }
+      schoolWhereTeacher = { user: { email: { contains: 'eeteixeira' } } }
+      schoolWhereRecord = { class: { school: { name: { contains: 'Anísio Teixeira' } } } }
+      schoolWherePedagogical = { student: { class: { school: { name: { contains: 'Anísio Teixeira' } } } } }
+    } else if (userEmail.includes('eemlobato')) {
+      schoolWhereStudent = { class: { school: { name: { contains: 'Monteiro Lobato' } } } }
+      schoolWhereClass = { school: { name: { contains: 'Monteiro Lobato' } } }
+      schoolWhereLesson = { lessonClasses: { some: { class: { school: { name: { contains: 'Monteiro Lobato' } } } } } }
+      schoolWhereTeacher = { user: { email: { contains: 'eemlobato' } } }
+      schoolWhereRecord = { class: { school: { name: { contains: 'Monteiro Lobato' } } } }
+      schoolWherePedagogical = { student: { class: { school: { name: { contains: 'Monteiro Lobato' } } } } }
+    }
+  }
+
   const [totalStudents, totalClasses, totalLessons, totalTeachers] = await Promise.all([
-    prisma.student.count({ where: { status: 'ATIVO' } }),
-    prisma.class.count({ where: { active: true } }),
-    prisma.lesson.count({ where: { active: true } }),
-    prisma.teacher.count(),
+    prisma.student.count({ where: { status: 'ATIVO', ...schoolWhereStudent } }),
+    prisma.class.count({ where: { active: true, ...schoolWhereClass } }),
+    prisma.lesson.count({ where: { active: true, ...schoolWhereLesson } }),
+    prisma.teacher.count({ where: schoolWhereTeacher }),
   ])
 
   const studentsWithoutHomework = await prisma.student.count({
     where: {
       status: 'ATIVO',
       homeworkSubmissions: { none: {} },
+      ...schoolWhereStudent,
     }
   })
 
   const teachersWithoutRecord = await prisma.teacher.count({
     where: {
       classRecords: { none: {} },
+      ...schoolWhereTeacher,
     }
   })
 
   const pendingRecords = await prisma.classRecord.count({
     where: {
       pending: { not: null },
+      ...schoolWhereRecord,
     }
   })
 
   const recentRecords = await prisma.classRecord.findMany({
     take: 5,
+    where: schoolWhereRecord,
     orderBy: { createdAt: 'desc' },
     include: {
       teacher: { include: { user: true } },
@@ -48,7 +77,7 @@ async function getMetrics(role: string, userId: string) {
   })
 
   const pedagogicalAlerts = await prisma.pedagogicalRecord.count({
-    where: { resolved: false }
+    where: { resolved: false, ...schoolWherePedagogical }
   })
 
   return {
@@ -64,7 +93,8 @@ export default async function DashboardPage() {
 
   const role = (session.user as any).role
   const userId = (session.user as any).id
-  const metrics = await getMetrics(role, userId)
+  const userEmail = session.user?.email || ''
+  const metrics = await getMetrics(role, userId, userEmail)
 
   return (
     <div className="p-8">

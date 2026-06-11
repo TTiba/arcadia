@@ -112,6 +112,7 @@ export const WRITE_TOOLS = [
     input_schema: {
       type: 'object' as const,
       properties: {
+        curriculumId: { type: 'string', description: 'ID do currículo (opcional). Se omitido, associa ao primeiro currículo cadastrado.' },
         gradeId: { type: 'string' },
         subjectId: { type: 'string' },
         weeklyHours: { type: 'number' },
@@ -222,11 +223,13 @@ export async function buildActionSummary(name: string, input: any): Promise<stri
     case 'criar_componente':
       return `Criar componente curricular: ${input.name}${input.code ? ` (${input.code})` : ''}${input.weeklyHours ? ` — ${input.weeklyHours}h/sem` : ''}`
     case 'adicionar_componente_serie': {
-      const [g, s] = await Promise.all([
+      const [g, s, c] = await Promise.all([
         prisma.grade.findUnique({ where: { id: input.gradeId }, select: { name: true } }),
         prisma.subject.findUnique({ where: { id: input.subjectId }, select: { name: true } }),
+        input.curriculumId ? prisma.curriculum.findUnique({ where: { id: input.curriculumId }, select: { name: true } }) : null,
       ])
-      return `Adicionar "${s?.name || '?'}" ao currículo da série ${g?.name || '?'}${input.weeklyHours ? ` (${input.weeklyHours}h/sem)` : ''}`
+      const currText = c ? ` no currículo ${c.name}` : ''
+      return `Adicionar "${s?.name || '?'}" ao currículo da série ${g?.name || '?'}${currText}${input.weeklyHours ? ` (${input.weeklyHours}h/sem)` : ''}`
     }
     default:
       return `Ação: ${name}`
@@ -294,10 +297,16 @@ export async function executeWriteTool(name: string, input: any): Promise<{ ok: 
     }
 
     case 'adicionar_componente_serie': {
+      let currId = input.curriculumId
+      if (!currId) {
+        const defaultCurr = await prisma.curriculum.findFirst({ orderBy: { createdAt: 'asc' } })
+        if (!defaultCurr) return { ok: false, message: 'Nenhum currículo cadastrado no sistema.' }
+        currId = defaultCurr.id
+      }
       await prisma.gradeSubject.upsert({
-        where: { gradeId_subjectId: { gradeId: input.gradeId, subjectId: input.subjectId } },
+        where: { curriculumId_gradeId_subjectId: { curriculumId: currId, gradeId: input.gradeId, subjectId: input.subjectId } },
         update: { weeklyHours: input.weeklyHours ?? 0 },
-        create: { gradeId: input.gradeId, subjectId: input.subjectId, weeklyHours: input.weeklyHours ?? 0 },
+        create: { curriculumId: currId, gradeId: input.gradeId, subjectId: input.subjectId, weeklyHours: input.weeklyHours ?? 0 },
       })
       return { ok: true, message: 'Componente adicionado ao currículo da série.' }
     }

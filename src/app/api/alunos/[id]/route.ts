@@ -12,6 +12,26 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 
   const role = (session.user as any).role as string
   const userId = (session.user as any).id as string
+  const userEmail = session.user?.email || ''
+
+  if (role !== 'ADMIN' && role !== 'DIRETOR') {
+    let schoolWhere = {}
+    if (userEmail.includes('eeteixeira')) {
+      schoolWhere = { class: { school: { name: { contains: 'Anísio Teixeira' } } } }
+    } else if (userEmail.includes('eemlobato')) {
+      schoolWhere = { class: { school: { name: { contains: 'Monteiro Lobato' } } } }
+    }
+
+    const studentExists = await prisma.student.findFirst({
+      where: {
+        id: params.id,
+        ...schoolWhere
+      }
+    })
+    if (!studentExists) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+  }
 
   // Professor: verify the student is in one of their classes
   if (!ALL_ACCESS_ROLES.includes(role)) {
@@ -74,6 +94,26 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const role = (session.user as any).role
   if (!['ADMIN', 'COORDENACAO'].includes(role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
+  const userEmail = session.user?.email || ''
+  if (role !== 'ADMIN' && role !== 'DIRETOR') {
+    let schoolWhere = {}
+    if (userEmail.includes('eeteixeira')) {
+      schoolWhere = { class: { school: { name: { contains: 'Anísio Teixeira' } } } }
+    } else if (userEmail.includes('eemlobato')) {
+      schoolWhere = { class: { school: { name: { contains: 'Monteiro Lobato' } } } }
+    }
+
+    const studentExists = await prisma.student.findFirst({
+      where: {
+        id: params.id,
+        ...schoolWhere
+      }
+    })
+    if (!studentExists) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+  }
 
   const body = await req.json()
   const { guardians, ...studentData } = body

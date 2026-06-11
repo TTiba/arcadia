@@ -13,10 +13,21 @@ export async function GET(req: NextRequest) {
   const studentId = searchParams.get('studentId')
   const type = searchParams.get('type')
 
+  const userEmail = session.user?.email || ''
+  let schoolWhere = {}
+  if (role !== 'ADMIN') {
+    if (userEmail.includes('eeteixeira')) {
+      schoolWhere = { student: { class: { school: { name: { contains: 'Anísio Teixeira' } } } } }
+    } else if (userEmail.includes('eemlobato')) {
+      schoolWhere = { student: { class: { school: { name: { contains: 'Monteiro Lobato' } } } } }
+    }
+  }
+
   const records = await prisma.pedagogicalRecord.findMany({
     where: {
       ...(studentId ? { studentId } : {}),
       ...(type ? { type: type as any } : {}),
+      ...schoolWhere,
     },
     include: {
       student: { include: { class: true } },

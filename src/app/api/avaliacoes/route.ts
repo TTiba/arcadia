@@ -11,11 +11,24 @@ export async function GET(req: NextRequest) {
   const classId = searchParams.get('classId')
   const subjectId = searchParams.get('subjectId')
 
+  const role = (session.user as any).role
+  const userEmail = session.user?.email || ''
+
+  let schoolWhere = {}
+  if (role !== 'ADMIN' && role !== 'DIRETOR') {
+    if (userEmail.includes('eeteixeira')) {
+      schoolWhere = { class: { school: { name: { contains: 'Anísio Teixeira' } } } }
+    } else if (userEmail.includes('eemlobato')) {
+      schoolWhere = { class: { school: { name: { contains: 'Monteiro Lobato' } } } }
+    }
+  }
+
   const assessments = await prisma.assessment.findMany({
     where: {
       active: true,
       ...(classId ? { classId } : {}),
       ...(subjectId ? { subjectId } : {}),
+      ...schoolWhere,
     },
     include: {
       subject: true,

@@ -15,8 +15,17 @@ export async function GET(req: NextRequest) {
 
   const role = (session.user as any).role
   const userId = (session.user as any).id
+  const userEmail = session.user?.email || ''
 
   let andClause: any[] = []
+
+  if (role !== 'ADMIN' && role !== 'DIRETOR') {
+    if (userEmail.includes('eeteixeira')) {
+      andClause.push({ class: { school: { name: { contains: 'Anísio Teixeira' } } } })
+    } else if (userEmail.includes('eemlobato')) {
+      andClause.push({ class: { school: { name: { contains: 'Monteiro Lobato' } } } })
+    }
+  }
 
   if (role === 'PROFESSOR') {
     const teacher = await prisma.teacher.findUnique({

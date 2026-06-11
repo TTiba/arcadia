@@ -90,10 +90,11 @@ export default function LoginPage() {
           <div className="mt-6 p-4 bg-muted rounded-lg">
             <p className="text-xs font-semibold text-muted-foreground mb-2">Contas de demonstração:</p>
             <div className="space-y-1 text-xs text-muted-foreground">
-              <p><span className="font-medium">Secretaria:</span> secretaria@seduc.pr.gov.br / seduc2024</p>
-              <p><span className="font-medium">Diretora A:</span> diretora@eeteixeira.pr.edu.br / admin123</p>
+              <p><span className="font-medium">Administrador:</span> adm@adm.com.br / admin123</p>
+              <p><span className="font-medium">Diretora A:</span> diretora@eeteixeira.pr.edu.br / diretor123</p>
               <p><span className="font-medium">Pedagoga A:</span> pedagoga@eeteixeira.pr.edu.br / ped123</p>
               <p><span className="font-medium">Prof. LP:</span> ana.batista@eeteixeira.pr.edu.br / prof123</p>
+              <p><span className="font-medium">Secretaria:</span> secretaria@seduc.pr.gov.br / seduc2024</p>
             </div>
           </div>
         </CardContent>

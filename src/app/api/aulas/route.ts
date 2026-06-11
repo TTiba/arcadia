@@ -14,6 +14,21 @@ export async function GET(req: NextRequest) {
 
   let andClause: any[] = [{ active: true }]
 
+  const role = (session.user as any).role
+  const userEmail = session.user?.email || ''
+
+  if (role !== 'ADMIN' && role !== 'DIRETOR') {
+    if (userEmail.includes('eeteixeira')) {
+      andClause.push({
+        lessonClasses: { some: { class: { school: { name: { contains: 'Anísio Teixeira' } } } } }
+      })
+    } else if (userEmail.includes('eemlobato')) {
+      andClause.push({
+        lessonClasses: { some: { class: { school: { name: { contains: 'Monteiro Lobato' } } } } }
+      })
+    }
+  }
+
   if (teacherId) {
     const teacherClasses = await prisma.teacherClass.findMany({
       where: { teacherId },

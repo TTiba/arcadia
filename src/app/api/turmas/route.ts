@@ -8,10 +8,38 @@ export async function GET() {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+  const role = (session.user as any).role
+  const userEmail = session.user?.email || ''
+
+  let schoolWhere = {}
+  if (role !== 'ADMIN' && role !== 'DIRETOR' && role !== 'PROFESSOR') {
+    if (userEmail.includes('eeteixeira')) {
+      schoolWhere = { school: { name: { contains: 'Anísio Teixeira' } } }
+    } else if (userEmail.includes('eemlobato')) {
+      schoolWhere = { school: { name: { contains: 'Monteiro Lobato' } } }
+    }
+  }
+
+  let teacherWhere = {}
+  if (role === 'PROFESSOR') {
+    const teacher = await prisma.teacher.findUnique({
+      where: { userId: (session.user as any).id },
+      select: { teacherClasses: { select: { classId: true } } }
+    })
+    const classIds = teacher?.teacherClasses.map(tc => tc.classId) ?? []
+    teacherWhere = { id: { in: classIds } }
+  }
+
   const classes = await prisma.class.findMany({
+    where: {
+      active: true,
+      ...schoolWhere,
+      ...teacherWhere,
+    },
     include: {
       grade: { include: { segment: true } },
       school: true,
+      curriculum: true,
       teacherClasses: {
         include: { teacher: { include: { user: true } }, subject: true }
       },
@@ -30,10 +58,10 @@ export async function POST(req: NextRequest) {
   if (!['ADMIN', 'COORDENACAO'].includes(role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const body = await req.json()
-  const { name, curriculum, gradeId, period, schoolId, shift, year } = body
+  const { name, curriculumId, gradeId, period, schoolId, shift, year } = body
 
   const created = await prisma.class.create({
-    data: { name, curriculum, gradeId, period, schoolId, shift, year: year || new Date().getFullYear() },
+    data: { name, curriculumId, gradeId, period, schoolId, shift, year: year || new Date().getFullYear() },
   })
 
   await createAuditLog({

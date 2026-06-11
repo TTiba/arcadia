@@ -22,6 +22,7 @@ export async function GET(req: NextRequest) {
 
   const role = (session.user as any).role as string
   const userId = (session.user as any).id as string
+  const userEmail = session.user?.email || ''
   const allowedClassIds = await getAllowedClassIds(role, userId)
 
   const { searchParams } = new URL(req.url)
@@ -32,6 +33,15 @@ export async function GET(req: NextRequest) {
   const subjectId = searchParams.get('subjectId') || undefined
   const dateFrom  = searchParams.get('dateFrom')  || undefined
   const dateTo    = searchParams.get('dateTo')    || undefined
+
+  let schoolWhere = {}
+  if (role !== 'ADMIN' && role !== 'DIRETOR' && role !== 'PROFESSOR') {
+    if (userEmail.includes('eeteixeira')) {
+      schoolWhere = { class: { school: { name: { contains: 'Anísio Teixeira' } } } }
+    } else if (userEmail.includes('eemlobato')) {
+      schoolWhere = { class: { school: { name: { contains: 'Monteiro Lobato' } } } }
+    }
+  }
 
   const hwWhere = {
     ...(subjectId ? { subjectId } : {}),
@@ -50,11 +60,13 @@ export async function GET(req: NextRequest) {
       ...(status  ? { status } : {}),
       ...(search  ? { OR: [{ name: { contains: search } }, { enrollment: { contains: search } }] } : {}),
       ...(allowedClassIds !== null ? { classId: { in: allowedClassIds } } : {}),
+      ...schoolWhere,
     },
     include: {
       class: {
         include: {
           grade: true,
+          school: true,
           _count: { select: { homework: Object.keys(hwWhere).length ? { where: hwWhere } : true } },
         },
       },

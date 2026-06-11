@@ -10,10 +10,23 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const classId = searchParams.get('classId')
 
+  const role = (session.user as any).role
+  const userEmail = session.user?.email || ''
+
+  let schoolWhere = {}
+  if (role !== 'ADMIN' && role !== 'DIRETOR') {
+    if (userEmail.includes('eeteixeira')) {
+      schoolWhere = { class: { school: { name: { contains: 'Anísio Teixeira' } } } }
+    } else if (userEmail.includes('eemlobato')) {
+      schoolWhere = { class: { school: { name: { contains: 'Monteiro Lobato' } } } }
+    }
+  }
+
   const homework = await prisma.homework.findMany({
     where: {
       active: true,
       ...(classId ? { classId } : {}),
+      ...schoolWhere,
     },
     include: {
       lesson: true,

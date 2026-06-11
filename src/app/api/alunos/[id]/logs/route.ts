@@ -11,6 +11,26 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 
   const role = (session.user as any).role as string
   const userId = (session.user as any).id as string
+  const userEmail = session.user?.email || ''
+
+  if (role !== 'ADMIN' && role !== 'DIRETOR') {
+    let schoolWhere = {}
+    if (userEmail.includes('eeteixeira')) {
+      schoolWhere = { class: { school: { name: { contains: 'Anísio Teixeira' } } } }
+    } else if (userEmail.includes('eemlobato')) {
+      schoolWhere = { class: { school: { name: { contains: 'Monteiro Lobato' } } } }
+    }
+
+    const studentExists = await prisma.student.findFirst({
+      where: {
+        id: params.id,
+        ...schoolWhere
+      }
+    })
+    if (!studentExists) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+  }
 
   // Professor: see only their own logs
   const where = ALL_ACCESS_ROLES.includes(role)
@@ -29,6 +49,28 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const role = (session.user as any).role
+  const userEmail = session.user?.email || ''
+
+  if (role !== 'ADMIN' && role !== 'DIRETOR') {
+    let schoolWhere = {}
+    if (userEmail.includes('eeteixeira')) {
+      schoolWhere = { class: { school: { name: { contains: 'Anísio Teixeira' } } } }
+    } else if (userEmail.includes('eemlobato')) {
+      schoolWhere = { class: { school: { name: { contains: 'Monteiro Lobato' } } } }
+    }
+
+    const studentExists = await prisma.student.findFirst({
+      where: {
+        id: params.id,
+        ...schoolWhere
+      }
+    })
+    if (!studentExists) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+  }
 
   const { category, content } = await req.json()
   if (!content?.trim()) return NextResponse.json({ error: 'Conteúdo obrigatório' }, { status: 400 })
@@ -50,6 +92,28 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+  const role = (session.user as any).role
+  const userEmail = session.user?.email || ''
+
+  if (role !== 'ADMIN' && role !== 'DIRETOR') {
+    let schoolWhere = {}
+    if (userEmail.includes('eeteixeira')) {
+      schoolWhere = { class: { school: { name: { contains: 'Anísio Teixeira' } } } }
+    } else if (userEmail.includes('eemlobato')) {
+      schoolWhere = { class: { school: { name: { contains: 'Monteiro Lobato' } } } }
+    }
+
+    const studentExists = await prisma.student.findFirst({
+      where: {
+        id: params.id,
+        ...schoolWhere
+      }
+    })
+    if (!studentExists) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+  }
+
   const { searchParams } = new URL(req.url)
   const logId = searchParams.get('logId')
   if (!logId) return NextResponse.json({ error: 'logId obrigatório' }, { status: 400 })
@@ -57,7 +121,6 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
   const log = await prisma.studentLog.findUnique({ where: { id: logId } })
   if (!log || log.studentId !== params.id) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  const role = (session.user as any).role
   const userId = (session.user as any).id
   if (log.userId !== userId && !['ADMIN', 'COORDENACAO'].includes(role)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })

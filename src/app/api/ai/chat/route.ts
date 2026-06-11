@@ -49,11 +49,23 @@ function calcCost(model: string, usage: { input_tokens: number; output_tokens: n
   return Math.round(cost * 10000) / 10000 // 4 decimal places
 }
 
-async function buildSchoolContext() {
+async function buildSchoolContext(role: string, userEmail: string) {
   const avg = (arr: number[]) => arr.length ? +(arr.reduce((a, b) => a + b, 0) / arr.length).toFixed(1) : null
   const pct = (n: number, t: number) => t ? Math.round(n / t * 100) : 0
 
-  const schools = await prisma.school.findMany({ include: { classes: true } })
+  let schoolWhere = {}
+  if (role !== 'ADMIN' && role !== 'DIRETOR') {
+    if (userEmail.includes('eeteixeira')) {
+      schoolWhere = { name: { contains: 'Anísio Teixeira' } }
+    } else if (userEmail.includes('eemlobato')) {
+      schoolWhere = { name: { contains: 'Monteiro Lobato' } }
+    }
+  }
+
+  const schools = await prisma.school.findMany({
+    where: schoolWhere,
+    include: { classes: true }
+  })
 
   // Per-school aggregated data — no per-student rows
   const escolas = await Promise.all(schools.map(async school => {
@@ -195,8 +207,18 @@ async function buildSchoolContext() {
     }
   }))
 
+  let recordWhere = {}
+  if (role !== 'ADMIN' && role !== 'DIRETOR') {
+    if (userEmail.includes('eeteixeira')) {
+      recordWhere = { class: { school: { name: { contains: 'Anísio Teixeira' } } } }
+    } else if (userEmail.includes('eemlobato')) {
+      recordWhere = { class: { school: { name: { contains: 'Monteiro Lobato' } } } }
+    }
+  }
+
   // Recent class records across all schools (last 15)
   const registrosRecentes = await prisma.classRecord.findMany({
+    where: recordWhere,
     orderBy: { date: 'desc' }, take: 15,
     select: {
       date: true, contentDeveloped: true, pending: true, observations: true,
@@ -245,7 +267,7 @@ export async function POST(req: NextRequest) {
 
   let schoolData: any
   try {
-    schoolData = await buildSchoolContext()
+    schoolData = await buildSchoolContext((session.user as any).role, session.user?.email || '')
   } catch (err: any) {
     console.error('[AI chat] buildSchoolContext failed:', err)
     return NextResponse.json(

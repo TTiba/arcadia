@@ -70,6 +70,7 @@ model Grade {
   segment       Segment        @relation(fields: [segmentId], references: [id])
   classes       Class[]
   gradeSubjects GradeSubject[]
+  saebDescriptors SaebDescriptor[]
 
   @@map("grades")
 }
@@ -92,38 +93,68 @@ model Subject {
   assessments     Assessment[]
   homework        Homework[]
   classRecords    ClassRecord[]
+  saebDescriptors SaebDescriptor[]
 
   @@map("subjects")
 }
 
+model Curriculum {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  classes         Class[]
+  gradeSubjects   GradeSubject[]
+  saebDescriptors CurriculumSaebDescriptor[]
+
+  @@map("curricula")
+}
+
+model CurriculumSaebDescriptor {
+  curriculumId     String
+  saebDescriptorId String
+
+  curriculum     Curriculum     @relation(fields: [curriculumId], references: [id], onDelete: Cascade)
+  saebDescriptor SaebDescriptor @relation(fields: [saebDescriptorId], references: [id], onDelete: Cascade)
+
+  @@id([curriculumId, saebDescriptorId])
+  @@map("curriculum_saeb_descriptors")
+}
+
 // Links subjects to specific grades — the curriculum matrix
 model GradeSubject {
-  gradeId     String
-  subjectId   String
-  weeklyHours Int    @default(0)
-  order       Int    @default(0)
+  curriculumId String
+  gradeId      String
+  subjectId    String
+  weeklyHours  Int    @default(0)
+  order        Int    @default(0)
 
-  grade   Grade   @relation(fields: [gradeId], references: [id], onDelete: Cascade)
-  subject Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  curriculum Curriculum @relation(fields: [curriculumId], references: [id], onDelete: Cascade)
+  grade      Grade      @relation(fields: [gradeId], references: [id], onDelete: Cascade)
+  subject    Subject    @relation(fields: [subjectId], references: [id], onDelete: Cascade)
 
-  @@id([gradeId, subjectId])
+  @@id([curriculumId, gradeId, subjectId])
   @@map("grade_subjects")
 }
 
 // ─── Class ────────────────────────────────────────────────────────────────────
 
 model Class {
-  id         String   @id @default(cuid())
-  name       String
-  curriculum String?
-  gradeId    String?
-  period     String?
-  schoolId   String?
-  shift      String?
-  active     Boolean  @default(true)
-  year       Int      @default(2024)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id           String      @id @default(cuid())
+  name         String
+  curriculumId String?
+  curriculum   Curriculum? @relation(fields: [curriculumId], references: [id], onDelete: SetNull)
+  gradeId      String?
+  period       String?
+  schoolId     String?
+  shift        String?
+  active       Boolean     @default(true)
+  year         Int         @default(2024)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
 
   grade          Grade?         @relation(fields: [gradeId], references: [id])
   school         School?        @relation(fields: [schoolId], references: [id])
@@ -513,9 +544,15 @@ model SaebDescriptor {
   level       String
   createdAt   DateTime @default(now())
 
+  subjectId   String?
+  subject     Subject? @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  gradeId     String?
+  grade       Grade?   @relation(fields: [gradeId], references: [id], onDelete: SetNull)
+
   performances  StudentSaebPerformance[]
   skillLinks    ActivitySkillLink[]
   questionStats WaygroundQuestionStat[]
+  curricula     CurriculumSaebDescriptor[]
 
   @@map("saeb_descriptors")
 }

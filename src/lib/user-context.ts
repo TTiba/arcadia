@@ -14,25 +14,55 @@ export async function buildUserContext(session: Session): Promise<UserContext> {
   const userId = (session.user as any).id
   const role = (session.user as any).role
 
-  if (role !== 'PROFESSOR') {
-    return { userId, role, allowedClassIds: null, allowedSubjectIds: null }
+  let allowedClassIds: string[] | null = null
+  let allowedSubjectIds: string[] | null = null
+
+  if (role !== 'ADMIN' && role !== 'DIRETOR') {
+    const userEmail = session.user?.email || ''
+    let schoolNamePattern = ''
+    if (userEmail.includes('eeteixeira')) {
+      schoolNamePattern = 'Anísio Teixeira'
+    } else if (userEmail.includes('eemlobato')) {
+      schoolNamePattern = 'Monteiro Lobato'
+    }
+
+    if (schoolNamePattern) {
+      const schoolClasses = await prisma.class.findMany({
+        where: {
+          active: true,
+          school: { name: { contains: schoolNamePattern } }
+        },
+        select: { id: true }
+      })
+      const schoolClassIds = schoolClasses.map(c => c.id)
+
+      if (role === 'PROFESSOR') {
+        const teacher = await prisma.teacher.findUnique({
+          where: { userId },
+          include: {
+            teacherClasses: true,
+            teacherSubjects: true,
+          },
+        })
+        if (teacher) {
+          allowedClassIds = teacher.teacherClasses
+            .map(tc => tc.classId)
+            .filter(cid => schoolClassIds.includes(cid))
+          allowedSubjectIds = Array.from(new Set(teacher.teacherSubjects.map(ts => ts.subjectId)))
+        } else {
+          allowedClassIds = []
+          allowedSubjectIds = []
+        }
+      } else {
+        allowedClassIds = schoolClassIds
+      }
+    } else {
+      allowedClassIds = []
+    }
+  } else {
+    // ADMIN and DIRETOR are unrestricted globally
+    allowedClassIds = null
   }
-
-  // For teachers, scope to their assigned classes and subjects only
-  const teacher = await prisma.teacher.findUnique({
-    where: { userId },
-    include: {
-      teacherClasses: true,
-      teacherSubjects: true,
-    },
-  })
-
-  if (!teacher) {
-    return { userId, role, allowedClassIds: [], allowedSubjectIds: [] }
-  }
-
-  const allowedClassIds = Array.from(new Set(teacher.teacherClasses.map(tc => tc.classId)))
-  const allowedSubjectIds = Array.from(new Set(teacher.teacherSubjects.map(ts => ts.subjectId)))
 
   return { userId, role, allowedClassIds, allowedSubjectIds }
 }

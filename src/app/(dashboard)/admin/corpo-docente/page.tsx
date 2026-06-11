@@ -15,7 +15,7 @@ import { ROLE_LABELS } from '@/lib/utils'
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface Subject { id: string; name: string }
-interface ClassOption { id: string; name: string; grade?: { name: string } }
+interface ClassOption { id: string; name: string; grade?: { name: string }; school?: { name: string } }
 
 interface StaffMember {
   id: string
@@ -69,6 +69,25 @@ function Avatar({ name, role }: { name: string; role: string }) {
   )
 }
 
+function formatGradeLabel(gradeName: string) {
+  const match = gradeName.match(/^(\d+)/)
+  if (match) {
+    return `Todos os ${match[1]} anos`
+  }
+  return `Todos do ${gradeName}`
+}
+
+function formatSchoolName(name: string) {
+  if (!name) return ''
+  return name
+    .replace(/Escola\s+Estadual\s+(?:Prof\.\s+)?/gi, '')
+    .replace(/Colégio\s+Estadual\s+(?:Prof\.\s+)?/gi, '')
+    .replace(/Escola\s+Estadual\s+/gi, '')
+    .replace(/Colégio\s+Estadual\s+/gi, '')
+    .replace(/E\.\s*E\.\s*/gi, '')
+    .replace(/C\.\s*E\.\s*/gi, '')
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function CorpoDocentePage() {
@@ -106,13 +125,36 @@ export default function CorpoDocentePage() {
     setSelectedClassIds([])
   }
 
+  const getExpandedClassSubjects = (list: ClassSubjectPair[]) => {
+    const expanded: ClassSubjectPair[] = []
+    for (const cs of list) {
+      if (cs.classId.startsWith('all-grade-')) {
+        const gradeName = cs.classId.replace('all-grade-', '')
+        const gradeClasses = classes.filter(c => c.grade?.name === gradeName)
+        for (const c of gradeClasses) {
+          if (!expanded.some(item => item.classId === c.id && item.subjectId === cs.subjectId)) {
+            expanded.push({ classId: c.id, subjectId: cs.subjectId })
+          }
+        }
+      } else {
+        if (cs.classId && cs.subjectId) {
+          if (!expanded.some(item => item.classId === cs.classId && item.subjectId === cs.subjectId)) {
+            expanded.push(cs)
+          }
+        }
+      }
+    }
+    return expanded
+  }
+
   const handleSave = async () => {
+    const expanded = getExpandedClassSubjects(classSubjects)
     const payload = {
       ...form,
       subjectIds: form.staffRole === 'PROFESSOR'
-        ? Array.from(new Set(classSubjects.map(cs => cs.subjectId)))
+        ? Array.from(new Set(expanded.map(cs => cs.subjectId)))
         : undefined,
-      classSubjects: form.staffRole === 'PROFESSOR' ? classSubjects : undefined,
+      classSubjects: form.staffRole === 'PROFESSOR' ? expanded : undefined,
       classIds: form.staffRole !== 'PROFESSOR' ? selectedClassIds : undefined,
     }
 
@@ -136,11 +178,12 @@ export default function CorpoDocentePage() {
   const handleEdit = async () => {
     if (!selected) return
 
+    const expanded = getExpandedClassSubjects(classSubjects)
     const payload = selected.role === 'PROFESSOR' ? {
       name: form.name, email: form.email, active: true,
       registration: form.registration,
-      classSubjects,
-      subjectIds: Array.from(new Set(classSubjects.map(cs => cs.subjectId))),
+      classSubjects: expanded,
+      subjectIds: Array.from(new Set(expanded.map(cs => cs.subjectId))),
     } : {
       name: form.name, email: form.email, active: true,
       classIds: selectedClassIds,
@@ -210,6 +253,10 @@ export default function CorpoDocentePage() {
   }
 
   function TeacherFields() {
+    const availableGrades = Array.from(
+      new Set(classes.map(c => c.grade?.name).filter(Boolean))
+    ).sort() as string[]
+
     return (
       <>
         <div className="space-y-2">
@@ -227,9 +274,18 @@ export default function CorpoDocentePage() {
                   onChange={e => updateClassSubject(i, 'classId', e.target.value)}
                 >
                   <option value="">Turma...</option>
+                  
+                  {availableGrades.map(grade => (
+                    <option key={`all-grade-${grade}`} value={`all-grade-${grade}`}>
+                      {formatGradeLabel(grade)}
+                    </option>
+                  ))}
+                  
+                  {availableGrades.length > 0 && <option disabled>──────────</option>}
+
                   {classes.map(c => (
                     <option key={c.id} value={c.id}>
-                      {c.grade?.name ? `${c.grade.name} - ` : ''}{c.name}
+                      {c.grade?.name ? `${c.grade.name} - ` : ''}{c.name} {c.school?.name ? `(${formatSchoolName(c.school.name)})` : ''}
                     </option>
                   ))}
                 </select>
@@ -268,30 +324,50 @@ export default function CorpoDocentePage() {
     return (
       <div className="space-y-2">
         <Label>Turmas associadas</Label>
-        <div className="border rounded-lg p-3 max-h-64 overflow-y-auto space-y-3">
-          {Object.entries(byGrade).map(([key, { gradeName, classes: gradeClasses }]) => (
-            <div key={key}>
-              <p className="text-xs font-semibold text-muted-foreground uppercase mb-1.5">{gradeName}</p>
-              <div className="flex flex-wrap gap-1.5">
-                {gradeClasses.map(c => {
-                  const isSelected = selectedClassIds.includes(c.id)
-                  return (
-                    <button
-                      key={c.id}
-                      type="button"
-                      onClick={() => toggleClass(c.id)}
-                      className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${isSelected
-                        ? 'bg-primary text-white border-primary'
-                        : 'bg-background text-foreground border-border hover:border-primary'
-                      }`}
-                    >
-                      {c.name}
-                    </button>
-                  )
-                })}
+        <div className="border rounded-lg p-3 max-h-64 overflow-y-auto space-y-4">
+          {Object.entries(byGrade).map(([key, { gradeName, classes: gradeClasses }]) => {
+            const gradeClassIds = gradeClasses.map(c => c.id)
+            const allChecked = gradeClassIds.every(id => selectedClassIds.includes(id))
+
+            return (
+              <div key={key} className="space-y-1.5">
+                <div className="flex items-center justify-between border-b pb-1 mb-1">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase">{gradeName}</p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (allChecked) {
+                        setSelectedClassIds(ids => ids.filter(id => !gradeClassIds.includes(id)))
+                      } else {
+                        setSelectedClassIds(ids => Array.from(new Set([...ids, ...gradeClassIds])))
+                      }
+                    }}
+                    className="text-[10px] text-primary hover:underline font-medium focus:outline-none"
+                  >
+                    {allChecked ? 'Desmarcar todos' : 'Selecionar todos'}
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {gradeClasses.map(c => {
+                    const isSelected = selectedClassIds.includes(c.id)
+                    return (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => toggleClass(c.id)}
+                        className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${isSelected
+                          ? 'bg-primary text-white border-primary font-medium'
+                          : 'bg-background text-foreground border-border hover:border-primary'
+                        }`}
+                      >
+                        {c.name} {c.school?.name ? `(${formatSchoolName(c.school.name)})` : ''}
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
-            </div>
-          ))}
+            )
+          })}
           {classes.length === 0 && <p className="text-sm text-muted-foreground">Nenhuma turma cadastrada.</p>}
         </div>
         {selectedClassIds.length > 0 && (
@@ -455,7 +531,7 @@ export default function CorpoDocentePage() {
                   })}
                 </div>
               </div>
-              <BasicFields />
+              {BasicFields()}
               <div className="space-y-2">
                 <Label>Senha inicial *</Label>
                 <Input type="password" placeholder="Mínimo 6 caracteres" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} />
@@ -469,7 +545,7 @@ export default function CorpoDocentePage() {
             </TabsContent>
 
             <TabsContent value="associacoes" className="space-y-4 pt-4">
-              {form.staffRole === 'PROFESSOR' ? <TeacherFields /> : <StaffClassFields />}
+              {form.staffRole === 'PROFESSOR' ? TeacherFields() : StaffClassFields()}
             </TabsContent>
           </Tabs>
 
@@ -502,7 +578,7 @@ export default function CorpoDocentePage() {
               </TabsList>
 
               <TabsContent value="dados" className="space-y-4 pt-4">
-                <BasicFields />
+                {BasicFields()}
                 {selected.role === 'PROFESSOR' && (
                   <div className="space-y-2">
                     <Label>Matrícula funcional</Label>
@@ -512,7 +588,7 @@ export default function CorpoDocentePage() {
               </TabsContent>
 
               <TabsContent value="associacoes" className="space-y-4 pt-4">
-                {selected.role === 'PROFESSOR' ? <TeacherFields /> : <StaffClassFields />}
+                {selected.role === 'PROFESSOR' ? TeacherFields() : StaffClassFields()}
               </TabsContent>
             </Tabs>
 

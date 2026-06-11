@@ -15,6 +15,28 @@ export async function GET(req: NextRequest) {
 
   if (!classId) return NextResponse.json({ error: 'classId required' }, { status: 400 })
 
+  const role = (session.user as any).role
+  const userEmail = session.user?.email || ''
+
+  if (role !== 'ADMIN' && role !== 'DIRETOR') {
+    let schoolWhere = {}
+    if (userEmail.includes('eeteixeira')) {
+      schoolWhere = { school: { name: { contains: 'Anísio Teixeira' } } }
+    } else if (userEmail.includes('eemlobato')) {
+      schoolWhere = { school: { name: { contains: 'Monteiro Lobato' } } }
+    }
+
+    const classExists = await prisma.class.findFirst({
+      where: {
+        id: classId,
+        ...schoolWhere
+      }
+    })
+    if (!classExists) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+  }
+
   const since = new Date()
   since.setDate(since.getDate() - days)
   since.setHours(0, 0, 0, 0)
