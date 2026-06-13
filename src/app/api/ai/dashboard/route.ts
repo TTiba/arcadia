@@ -47,7 +47,8 @@ export async function POST(req: NextRequest) {
     messages: [{ role: 'user', content: prompt }],
   })
 
-  const text = response.content[0].type === 'text' ? response.content[0].text.trim() : ''
+  const block = response.content[0]
+  const text = block && block.type === 'text' ? block.text.trim() : ''
 
   let config: CompactDashboardConfig
   try {

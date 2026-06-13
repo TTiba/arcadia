@@ -2,14 +2,24 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { buildUserContext, applyClassScope, applyStudentScope, type UserContext } from '@/lib/user-context'
 import Anthropic from '@anthropic-ai/sdk'
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
-async function buildSchoolContext() {
+// Cap how many students are serialized into the prompt to keep the context
+// (and token cost) bounded on larger schools.
+const MAX_STUDENTS_IN_CONTEXT = 120
+
+async function buildSchoolContext(ctx: UserContext) {
+  // Scope every query to the data this user is allowed to see. For PROFESSOR
+  // this is limited to their assigned classes; ADMIN/COORDENACAO/PEDAGOGO are
+  // unrestricted (allowedClassIds === null).
+  const classWhere = ctx.allowedClassIds ? { id: { in: ctx.allowedClassIds } } : {}
+
   const [
     classes,
-    students,
+    allStudents,
     assessments,
     homework,
     classRecords,
@@ -18,9 +28,11 @@ async function buildSchoolContext() {
     enemPerformances,
   ] = await Promise.all([
     prisma.class.findMany({
+      where: classWhere,
       include: { teacherClasses: { include: { teacher: { include: { user: true } }, subject: true } } }
     }),
     prisma.student.findMany({
+      where: applyClassScope({}, ctx),
       include: {
         class: true,
         gradeRecords: { include: { assessment: { include: { subject: true } } } },
@@ -29,8 +41,9 @@ async function buildSchoolContext() {
         enemPerformances: { include: { competency: true } },
       }
     }),
-    prisma.assessment.findMany({ include: { subject: true, class: true } }),
+    prisma.assessment.findMany({ where: applyClassScope({}, ctx), include: { subject: true, class: true } }),
     prisma.homework.findMany({
+      where: applyClassScope({}, ctx),
       include: {
         subject: true, class: true,
         submissions: true,
@@ -38,17 +51,22 @@ async function buildSchoolContext() {
       }
     }),
     prisma.classRecord.findMany({
+      where: applyClassScope({}, ctx),
       include: { class: true, subject: true, teacher: { include: { user: true } } },
       orderBy: { date: 'desc' }, take: 30,
     }),
     prisma.pedagogicalRecord.findMany({
-      where: { confidentiality: { not: 'CONFIDENCIAL' } },
+      where: applyStudentScope({ confidentiality: { not: 'CONFIDENCIAL' } }, ctx),
       include: { student: true },
       orderBy: { date: 'desc' }, take: 20,
     }),
-    prisma.studentSaebPerformance.findMany({ include: { descriptor: true, student: true } }),
-    prisma.studentEnemPerformance.findMany({ include: { competency: true, student: true } }),
+    prisma.studentSaebPerformance.findMany({ where: applyStudentScope({}, ctx), include: { descriptor: true, student: true } }),
+    prisma.studentEnemPerformance.findMany({ where: applyStudentScope({}, ctx), include: { competency: true, student: true } }),
   ])
+
+  // Bound the per-student payload that goes into the prompt.
+  const students = allStudents.slice(0, MAX_STUDENTS_IN_CONTEXT)
+  const studentsTruncated = allStudents.length - students.length
 
   // Summarize SAEB by descriptor
   const saebByDescriptor: Record<string, { desc: string; area: string; scores: number[]; abaixo: number; basico: number; adequado: number }> = {}
@@ -113,6 +131,12 @@ async function buildSchoolContext() {
   }))
 
   return {
+    escopo: ctx.allowedClassIds
+      ? 'Dados restritos às turmas atribuídas a este usuário (professor).'
+      : 'Acesso completo aos dados da escola.',
+    alunosOmitidos: studentsTruncated > 0
+      ? `${studentsTruncated} aluno(s) omitido(s) do contexto por limite de tamanho. Sinalize que a análise pode estar incompleta se necessário.`
+      : null,
     turmas: classes.map(c => ({
       nome: c.name, turno: c.shift, ano: c.year,
       professores: c.teacherClasses.map(tc => `${tc.teacher.user.name} (${tc.subject.name})`),
@@ -154,7 +178,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'messages array required' }, { status: 400 })
   }
 
-  const schoolData = await buildSchoolContext()
+  const ctx = await buildUserContext(session)
+  const schoolData = await buildSchoolContext(ctx)
 
   const systemPrompt = `Você é o Assistente Pedagógico Arcadia — um assistente de inteligência artificial especializado em gestão escolar e análise de dados educacionais.
 
@@ -185,6 +210,7 @@ ${JSON.stringify(schoolData, null, 2)}
     })),
   })
 
-  const text = response.content[0].type === 'text' ? response.content[0].text : ''
+  const block = response.content[0]
+  const text = block && block.type === 'text' ? block.text : ''
   return NextResponse.json({ message: text })
 }
