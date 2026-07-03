@@ -17,9 +17,12 @@ model User {
   role      String   @default("VISUALIZACAO")
   active    Boolean  @default(true)
   avatarUrl String?
+  // Escola à qual o usuário pertence; null = acesso à rede toda (ADMIN, DIRETOR, secretaria)
+  schoolId  String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  school              School?  @relation(fields: [schoolId], references: [id])
   teacher             Teacher?
   pedagogicalRecords  PedagogicalRecord[] @relation("RecordedBy")
   classRecords        ClassRecord[]
@@ -37,6 +40,8 @@ model User {
 model School {
   id        String   @id @default(cuid())
   name      String
+  // Código INEP da escola (8 dígitos) — identificador oficial do MEC
+  inepCode  String?  @unique
   address   String?
   phone     String?
   email     String?
@@ -45,6 +50,7 @@ model School {
   updatedAt DateTime @updatedAt
 
   classes Class[]
+  users   User[]
 
   @@map("schools")
 }

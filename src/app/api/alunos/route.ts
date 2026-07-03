@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { createAuditLog } from '@/lib/audit'
+import { getSchoolScope } from '@/lib/user-context'
 
 const ALL_ACCESS_ROLES = ['ADMIN', 'COORDENACAO', 'DIRETOR', 'PEDAGOGO', 'SECRETARIO']
 
@@ -22,7 +23,6 @@ export async function GET(req: NextRequest) {
 
   const role = (session.user as any).role as string
   const userId = (session.user as any).id as string
-  const userEmail = session.user?.email || ''
   const allowedClassIds = await getAllowedClassIds(role, userId)
 
   const { searchParams } = new URL(req.url)
@@ -34,14 +34,12 @@ export async function GET(req: NextRequest) {
   const dateFrom  = searchParams.get('dateFrom')  || undefined
   const dateTo    = searchParams.get('dateTo')    || undefined
 
-  let schoolWhere = {}
-  if (role !== 'ADMIN' && role !== 'DIRETOR' && role !== 'PROFESSOR') {
-    if (userEmail.includes('eeteixeira')) {
-      schoolWhere = { class: { school: { name: { contains: 'Anísio Teixeira' } } } }
-    } else if (userEmail.includes('eemlobato')) {
-      schoolWhere = { class: { school: { name: { contains: 'Monteiro Lobato' } } } }
-    }
-  }
+  // PROFESSOR is scoped via allowedClassIds instead of school
+  const schoolId = role === 'PROFESSOR' ? null : await getSchoolScope(session)
+
+  const classFilter: Record<string, unknown> = {}
+  if (gradeId) classFilter.gradeId = gradeId
+  if (schoolId) classFilter.schoolId = schoolId
 
   const hwWhere = {
     ...(subjectId ? { subjectId } : {}),
@@ -56,11 +54,10 @@ export async function GET(req: NextRequest) {
   const students = await prisma.student.findMany({
     where: {
       ...(classId ? { classId } : {}),
-      ...(gradeId ? { class: { gradeId } } : {}),
       ...(status  ? { status } : {}),
       ...(search  ? { OR: [{ name: { contains: search } }, { enrollment: { contains: search } }] } : {}),
       ...(allowedClassIds !== null ? { classId: { in: allowedClassIds } } : {}),
-      ...schoolWhere,
+      ...(Object.keys(classFilter).length ? { class: classFilter } : {}),
     },
     include: {
       class: {

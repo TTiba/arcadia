@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { getSchoolScope } from '@/lib/user-context'
 
 // GET /api/attendance/summary?classId=X&days=30
 // Returns per-student absence counts and overall class stats
@@ -15,22 +16,10 @@ export async function GET(req: NextRequest) {
 
   if (!classId) return NextResponse.json({ error: 'classId required' }, { status: 400 })
 
-  const role = (session.user as any).role
-  const userEmail = session.user?.email || ''
-
-  if (role !== 'ADMIN' && role !== 'DIRETOR') {
-    let schoolWhere = {}
-    if (userEmail.includes('eeteixeira')) {
-      schoolWhere = { school: { name: { contains: 'Anísio Teixeira' } } }
-    } else if (userEmail.includes('eemlobato')) {
-      schoolWhere = { school: { name: { contains: 'Monteiro Lobato' } } }
-    }
-
+  const schoolId = await getSchoolScope(session)
+  if (schoolId) {
     const classExists = await prisma.class.findFirst({
-      where: {
-        id: classId,
-        ...schoolWhere
-      }
+      where: { id: classId, schoolId },
     })
     if (!classExists) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })

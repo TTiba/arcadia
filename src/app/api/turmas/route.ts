@@ -3,22 +3,15 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { createAuditLog } from '@/lib/audit'
+import { getSchoolScope, schoolWhere } from '@/lib/user-context'
 
 export async function GET() {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const role = (session.user as any).role
-  const userEmail = session.user?.email || ''
 
-  let schoolWhere = {}
-  if (role !== 'ADMIN' && role !== 'DIRETOR' && role !== 'PROFESSOR') {
-    if (userEmail.includes('eeteixeira')) {
-      schoolWhere = { school: { name: { contains: 'Anísio Teixeira' } } }
-    } else if (userEmail.includes('eemlobato')) {
-      schoolWhere = { school: { name: { contains: 'Monteiro Lobato' } } }
-    }
-  }
+  const schoolId = await getSchoolScope(session)
 
   let teacherWhere = {}
   if (role === 'PROFESSOR') {
@@ -33,7 +26,7 @@ export async function GET() {
   const classes = await prisma.class.findMany({
     where: {
       active: true,
-      ...schoolWhere,
+      ...(role === 'PROFESSOR' ? {} : schoolWhere.class(schoolId)),
       ...teacherWhere,
     },
     include: {

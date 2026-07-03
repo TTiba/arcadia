@@ -59,6 +59,8 @@ const config: Config = {
           light: 'hsl(182 98% 32%)',
           dark: 'hsl(182 98% 16%)',
         },
+        success: 'hsl(var(--success))',
+        warning: 'hsl(var(--warning))',
         warm: {
           50: 'hsl(45 23% 98%)',
           100: 'hsl(45 23% 96%)',

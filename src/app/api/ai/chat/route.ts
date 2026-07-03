@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import Anthropic from '@anthropic-ai/sdk'
 import { ALL_TOOLS, READ_TOOLS, WRITE_TOOL_NAMES, executeReadTool, buildActionSummary } from '@/lib/ai-tools'
+import { getSchoolScope, schoolWhere } from '@/lib/user-context'
 
 // Lazy client — avoids SDK throwing at module load when key is absent
 let _client: Anthropic | null = null
@@ -49,21 +50,12 @@ function calcCost(model: string, usage: { input_tokens: number; output_tokens: n
   return Math.round(cost * 10000) / 10000 // 4 decimal places
 }
 
-async function buildSchoolContext(role: string, userEmail: string) {
+async function buildSchoolContext(schoolId: string | null) {
   const avg = (arr: number[]) => arr.length ? +(arr.reduce((a, b) => a + b, 0) / arr.length).toFixed(1) : null
   const pct = (n: number, t: number) => t ? Math.round(n / t * 100) : 0
 
-  let schoolWhere = {}
-  if (role !== 'ADMIN' && role !== 'DIRETOR') {
-    if (userEmail.includes('eeteixeira')) {
-      schoolWhere = { name: { contains: 'Anísio Teixeira' } }
-    } else if (userEmail.includes('eemlobato')) {
-      schoolWhere = { name: { contains: 'Monteiro Lobato' } }
-    }
-  }
-
   const schools = await prisma.school.findMany({
-    where: schoolWhere,
+    where: schoolWhere.school(schoolId),
     include: { classes: true }
   })
 
@@ -207,18 +199,9 @@ async function buildSchoolContext(role: string, userEmail: string) {
     }
   }))
 
-  let recordWhere = {}
-  if (role !== 'ADMIN' && role !== 'DIRETOR') {
-    if (userEmail.includes('eeteixeira')) {
-      recordWhere = { class: { school: { name: { contains: 'Anísio Teixeira' } } } }
-    } else if (userEmail.includes('eemlobato')) {
-      recordWhere = { class: { school: { name: { contains: 'Monteiro Lobato' } } } }
-    }
-  }
-
   // Recent class records across all schools (last 15)
   const registrosRecentes = await prisma.classRecord.findMany({
-    where: recordWhere,
+    where: schoolWhere.classRecord(schoolId),
     orderBy: { date: 'desc' }, take: 15,
     select: {
       date: true, contentDeveloped: true, pending: true, observations: true,
@@ -267,7 +250,8 @@ export async function POST(req: NextRequest) {
 
   let schoolData: any
   try {
-    schoolData = await buildSchoolContext((session.user as any).role, session.user?.email || '')
+    const schoolId = await getSchoolScope(session)
+    schoolData = await buildSchoolContext(schoolId)
   } catch (err: any) {
     console.error('[AI chat] buildSchoolContext failed:', err)
     return NextResponse.json(

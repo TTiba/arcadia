@@ -10,6 +10,65 @@ export interface UserContext {
   allowedSubjectIds: string[] | null
 }
 
+// ─── Escopo por escola ────────────────────────────────────────────────────────
+// Fonte canônica: User.schoolId (relação no banco). Escolas são identificadas
+// pelo código INEP (School.inepCode). O fallback por domínio de email cobre
+// bancos ainda não re-seedados e será removido depois da migração.
+
+const LEGACY_EMAIL_SCHOOL_PATTERNS: [string, string][] = [
+  ['eeteixeira', 'Anísio Teixeira'],
+  ['eemlobato', 'Monteiro Lobato'],
+]
+
+// Resolve a escola do usuário. Retorna null = sem restrição (visão de rede:
+// ADMIN, DIRETOR e usuários sem vínculo de escola com papel de secretaria).
+export async function resolveSchoolId(
+  userId: string,
+  role: string,
+  email?: string | null
+): Promise<string | null> {
+  if (role === 'ADMIN' || role === 'DIRETOR') return null
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { schoolId: true },
+  })
+  if (user?.schoolId) return user.schoolId
+
+  // Fallback legado por email — remove quando todos os bancos tiverem schoolId
+  const pattern = LEGACY_EMAIL_SCHOOL_PATTERNS.find(([domain]) => email?.includes(domain))
+  if (pattern) {
+    const school = await prisma.school.findFirst({
+      where: { name: { contains: pattern[1] } },
+      select: { id: true },
+    })
+    if (school) return school.id
+  }
+
+  return null
+}
+
+export async function getSchoolScope(session: Session): Promise<string | null> {
+  const userId = (session.user as any).id
+  const role = (session.user as any).role
+  return resolveSchoolId(userId, role, session.user?.email)
+}
+
+// Formas de `where` por entidade — todas colapsam para {} quando schoolId é null
+export const schoolWhere = {
+  school:      (sid: string | null) => (sid ? { id: sid } : {}),
+  class:       (sid: string | null) => (sid ? { schoolId: sid } : {}),
+  student:     (sid: string | null) => (sid ? { class: { schoolId: sid } } : {}),
+  lesson:      (sid: string | null) => (sid ? { lessonClasses: { some: { class: { schoolId: sid } } } } : {}),
+  teacher:     (sid: string | null) => (sid ? { user: { schoolId: sid } } : {}),
+  user:        (sid: string | null) => (sid ? { schoolId: sid } : {}),
+  classRecord: (sid: string | null) => (sid ? { class: { schoolId: sid } } : {}),
+  pedagogical: (sid: string | null) => (sid ? { student: { class: { schoolId: sid } } } : {}),
+  homework:    (sid: string | null) => (sid ? { class: { schoolId: sid } } : {}),
+  assessment:  (sid: string | null) => (sid ? { class: { schoolId: sid } } : {}),
+  attendance:  (sid: string | null) => (sid ? { class: { schoolId: sid } } : {}),
+}
+
 export async function buildUserContext(session: Session): Promise<UserContext> {
   const userId = (session.user as any).id
   const role = (session.user as any).role
@@ -18,20 +77,11 @@ export async function buildUserContext(session: Session): Promise<UserContext> {
   let allowedSubjectIds: string[] | null = null
 
   if (role !== 'ADMIN' && role !== 'DIRETOR') {
-    const userEmail = session.user?.email || ''
-    let schoolNamePattern = ''
-    if (userEmail.includes('eeteixeira')) {
-      schoolNamePattern = 'Anísio Teixeira'
-    } else if (userEmail.includes('eemlobato')) {
-      schoolNamePattern = 'Monteiro Lobato'
-    }
+    const schoolId = await resolveSchoolId(userId, role, session.user?.email)
 
-    if (schoolNamePattern) {
+    if (schoolId) {
       const schoolClasses = await prisma.class.findMany({
-        where: {
-          active: true,
-          school: { name: { contains: schoolNamePattern } }
-        },
+        where: { active: true, schoolId },
         select: { id: true }
       })
       const schoolClassIds = schoolClasses.map(c => c.id)

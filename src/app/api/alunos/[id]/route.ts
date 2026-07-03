@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { createAuditLog } from '@/lib/audit'
+import { getSchoolScope, schoolWhere } from '@/lib/user-context'
 
 const ALL_ACCESS_ROLES = ['ADMIN', 'COORDENACAO', 'DIRETOR', 'PEDAGOGO', 'SECRETARIO']
 
@@ -12,20 +13,13 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 
   const role = (session.user as any).role as string
   const userId = (session.user as any).id as string
-  const userEmail = session.user?.email || ''
 
-  if (role !== 'ADMIN' && role !== 'DIRETOR') {
-    let schoolWhere = {}
-    if (userEmail.includes('eeteixeira')) {
-      schoolWhere = { class: { school: { name: { contains: 'Anísio Teixeira' } } } }
-    } else if (userEmail.includes('eemlobato')) {
-      schoolWhere = { class: { school: { name: { contains: 'Monteiro Lobato' } } } }
-    }
-
+  const schoolIdScope = await getSchoolScope(session)
+  if (schoolIdScope) {
     const studentExists = await prisma.student.findFirst({
       where: {
         id: params.id,
-        ...schoolWhere
+        ...schoolWhere.student(schoolIdScope),
       }
     })
     if (!studentExists) {
@@ -95,19 +89,12 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
   const role = (session.user as any).role
   if (!['ADMIN', 'COORDENACAO'].includes(role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-  const userEmail = session.user?.email || ''
-  if (role !== 'ADMIN' && role !== 'DIRETOR') {
-    let schoolWhere = {}
-    if (userEmail.includes('eeteixeira')) {
-      schoolWhere = { class: { school: { name: { contains: 'Anísio Teixeira' } } } }
-    } else if (userEmail.includes('eemlobato')) {
-      schoolWhere = { class: { school: { name: { contains: 'Monteiro Lobato' } } } }
-    }
-
+  const schoolIdScope = await getSchoolScope(session)
+  if (schoolIdScope) {
     const studentExists = await prisma.student.findFirst({
       where: {
         id: params.id,
-        ...schoolWhere
+        ...schoolWhere.student(schoolIdScope),
       }
     })
     if (!studentExists) {

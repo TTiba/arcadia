@@ -37,26 +37,11 @@ export default function TurmasPage() {
   const { toast } = useToast()
   const { data: session } = useSession()
   const role = (session?.user as any)?.role || ''
-  const email = session?.user?.email || ''
 
   useEffect(() => {
     fetchClasses()
     fetchCurricula()
   }, [])
-
-  useEffect(() => {
-    if (classes.length > 0 && email && role === 'DIRETOR') {
-      const isTeixeira = email.includes('eeteixeira')
-      const targetSchool = classes.find(c => 
-        isTeixeira 
-          ? c.school?.name?.includes('Anísio Teixeira')
-          : c.school?.name?.includes('Monteiro Lobato')
-      )?.school
-      if (targetSchool) {
-        setSelectedSchoolId(targetSchool.id)
-      }
-    }
-  }, [classes, email, role])
 
   const fetchClasses = async () => {
     const res = await fetch('/api/turmas')

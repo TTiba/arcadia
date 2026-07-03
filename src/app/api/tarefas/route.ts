@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { getSchoolScope, schoolWhere } from '@/lib/user-context'
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -10,23 +11,13 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const classId = searchParams.get('classId')
 
-  const role = (session.user as any).role
-  const userEmail = session.user?.email || ''
-
-  let schoolWhere = {}
-  if (role !== 'ADMIN' && role !== 'DIRETOR') {
-    if (userEmail.includes('eeteixeira')) {
-      schoolWhere = { class: { school: { name: { contains: 'Anísio Teixeira' } } } }
-    } else if (userEmail.includes('eemlobato')) {
-      schoolWhere = { class: { school: { name: { contains: 'Monteiro Lobato' } } } }
-    }
-  }
+  const schoolId = await getSchoolScope(session)
 
   const homework = await prisma.homework.findMany({
     where: {
       active: true,
       ...(classId ? { classId } : {}),
-      ...schoolWhere,
+      ...schoolWhere.homework(schoolId),
     },
     include: {
       lesson: true,

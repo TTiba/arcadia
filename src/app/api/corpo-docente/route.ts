@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { createAuditLog } from '@/lib/audit'
 import bcrypt from 'bcryptjs'
+import { getSchoolScope, schoolWhere } from '@/lib/user-context'
 
 const STAFF_ROLES = ['PROFESSOR', 'PEDAGOGO', 'SECRETARIO']
 
@@ -11,22 +12,12 @@ export async function GET(_req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const role = (session.user as any).role
-  const userEmail = session.user?.email || ''
-
-  let emailWhere = {}
-  if (role !== 'ADMIN' && role !== 'DIRETOR') {
-    if (userEmail.includes('eeteixeira')) {
-      emailWhere = { email: { contains: 'eeteixeira' } }
-    } else if (userEmail.includes('eemlobato')) {
-      emailWhere = { email: { contains: 'eemlobato' } }
-    }
-  }
+  const schoolId = await getSchoolScope(session)
 
   const users = await prisma.user.findMany({
     where: {
       role: { in: STAFF_ROLES },
-      ...emailWhere,
+      ...schoolWhere.user(schoolId),
     },
     include: {
       teacher: {

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { getSchoolScope, schoolWhere } from '@/lib/user-context'
 
 const ALLOW_SEND: Record<string, string[]> = {
   ADMIN:        ['ADMIN', 'COORDENACAO', 'PEDAGOGO', 'PROFESSOR', 'VISUALIZACAO'],
@@ -21,26 +22,18 @@ export async function GET() {
   if (!session) return NextResponse.json([])
   const userId = (session.user as any).id
   const role   = (session.user as any).role
-  const userEmail = session.user?.email || ''
 
   const allowedRoles = ALLOW_SEND[role] ?? []
   if (allowedRoles.length === 0) return NextResponse.json([])
 
-  let schoolWhere = {}
-  if (role !== 'ADMIN' && role !== 'DIRETOR') {
-    if (userEmail.includes('eeteixeira')) {
-      schoolWhere = { email: { contains: 'eeteixeira' } }
-    } else if (userEmail.includes('eemlobato')) {
-      schoolWhere = { email: { contains: 'eemlobato' } }
-    }
-  }
+  const schoolId = await getSchoolScope(session)
 
   const contacts = await prisma.user.findMany({
     where: {
       role: { in: allowedRoles },
       id: { not: userId },
       active: true,
-      ...schoolWhere,
+      ...schoolWhere.user(schoolId),
     },
     select: { id: true, name: true, role: true, email: true },
     orderBy: [{ role: 'asc' }, { name: 'asc' }],

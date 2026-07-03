@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { getSchoolScope, schoolWhere } from '@/lib/user-context'
 
 const ALL_ACCESS_ROLES = ['ADMIN', 'COORDENACAO', 'DIRETOR', 'PEDAGOGO', 'SECRETARIO']
 
@@ -11,20 +12,13 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 
   const role = (session.user as any).role as string
   const userId = (session.user as any).id as string
-  const userEmail = session.user?.email || ''
 
-  if (role !== 'ADMIN' && role !== 'DIRETOR') {
-    let schoolWhere = {}
-    if (userEmail.includes('eeteixeira')) {
-      schoolWhere = { class: { school: { name: { contains: 'Anísio Teixeira' } } } }
-    } else if (userEmail.includes('eemlobato')) {
-      schoolWhere = { class: { school: { name: { contains: 'Monteiro Lobato' } } } }
-    }
-
+  const schoolIdScope = await getSchoolScope(session)
+  if (schoolIdScope) {
     const studentExists = await prisma.student.findFirst({
       where: {
         id: params.id,
-        ...schoolWhere
+        ...schoolWhere.student(schoolIdScope),
       }
     })
     if (!studentExists) {
@@ -50,21 +44,12 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const role = (session.user as any).role
-  const userEmail = session.user?.email || ''
-
-  if (role !== 'ADMIN' && role !== 'DIRETOR') {
-    let schoolWhere = {}
-    if (userEmail.includes('eeteixeira')) {
-      schoolWhere = { class: { school: { name: { contains: 'Anísio Teixeira' } } } }
-    } else if (userEmail.includes('eemlobato')) {
-      schoolWhere = { class: { school: { name: { contains: 'Monteiro Lobato' } } } }
-    }
-
+  const schoolIdScope = await getSchoolScope(session)
+  if (schoolIdScope) {
     const studentExists = await prisma.student.findFirst({
       where: {
         id: params.id,
-        ...schoolWhere
+        ...schoolWhere.student(schoolIdScope),
       }
     })
     if (!studentExists) {
@@ -93,20 +78,13 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const role = (session.user as any).role
-  const userEmail = session.user?.email || ''
 
-  if (role !== 'ADMIN' && role !== 'DIRETOR') {
-    let schoolWhere = {}
-    if (userEmail.includes('eeteixeira')) {
-      schoolWhere = { class: { school: { name: { contains: 'Anísio Teixeira' } } } }
-    } else if (userEmail.includes('eemlobato')) {
-      schoolWhere = { class: { school: { name: { contains: 'Monteiro Lobato' } } } }
-    }
-
+  const schoolIdScope = await getSchoolScope(session)
+  if (schoolIdScope) {
     const studentExists = await prisma.student.findFirst({
       where: {
         id: params.id,
-        ...schoolWhere
+        ...schoolWhere.student(schoolIdScope),
       }
     })
     if (!studentExists) {

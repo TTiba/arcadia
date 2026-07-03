@@ -242,6 +242,7 @@ async function main() {
 
   async function buildSchool(cfg: {
     name: string; address: string; email: string
+    inepCode: string
     dir: { name: string; email: string }
     coord: { name: string; email: string }
     ped: { name: string; email: string }
@@ -251,12 +252,14 @@ async function main() {
     prefix: string // 'A' | 'B'
     idxOff: number // name index offset
   }) {
-    const school = await prisma.school.create({ data: { name: cfg.name, address: cfg.address, email: cfg.email } })
-    await prisma.user.create({ data: { name: cfg.dir.name,   email: cfg.dir.email,   password: hash('diretor123'), role: 'DIRETOR'       } })
-    await prisma.user.create({ data: { name: cfg.coord.name, email: cfg.coord.email, password: hash('coord123'), role: 'COORDENACAO' } })
-    const pedUser = await prisma.user.create({ data: { name: cfg.ped.name, email: cfg.ped.email, password: hash('ped123'), role: 'PEDAGOGO' } })
+    const school = await prisma.school.create({ data: { name: cfg.name, inepCode: cfg.inepCode, address: cfg.address, email: cfg.email } })
+    // DIRETOR pertence à escola mas mantém visão de rede (regra em user-context);
+    // os demais papéis ficam restritos à própria escola via schoolId.
+    await prisma.user.create({ data: { name: cfg.dir.name,   email: cfg.dir.email,   password: hash('diretor123'), role: 'DIRETOR',     schoolId: school.id } })
+    await prisma.user.create({ data: { name: cfg.coord.name, email: cfg.coord.email, password: hash('coord123'), role: 'COORDENACAO', schoolId: school.id } })
+    const pedUser = await prisma.user.create({ data: { name: cfg.ped.name, email: cfg.ped.email, password: hash('ped123'), role: 'PEDAGOGO', schoolId: school.id } })
 
-    const tUsers = await Promise.all(cfg.teachers.map(t => prisma.user.create({ data: { name: t.name, email: t.email, password: hash('prof123'), role: 'PROFESSOR' } })))
+    const tUsers = await Promise.all(cfg.teachers.map(t => prisma.user.create({ data: { name: t.name, email: t.email, password: hash('prof123'), role: 'PROFESSOR', schoolId: school.id } })))
     const tchs   = await Promise.all(cfg.teachers.map((t, i) => prisma.teacher.create({ data: { userId: tUsers[i].id, registration: t.reg, bio: t.bio } })))
     const [tchPort, tchMat, tchCien, tchHist, tchGeo] = tchs
     const [tPortU, tMatU, tCienU, tHistU, tGeoU]     = tUsers
@@ -399,6 +402,7 @@ async function main() {
   console.log('  Creating School A (Curitiba)...')
   const A = await buildSchool({
     name: 'Escola Estadual Prof. Anísio Teixeira',
+    inepCode: '41031120',
     address: 'Rua das Araucárias, 450 - Batel, Curitiba - PR',
     email: 'contato@eeteixeira.pr.edu.br',
     dir:   { name: 'Diretora Regina Aparecida Mendes',   email: 'diretora@eeteixeira.pr.edu.br'    },
@@ -418,6 +422,7 @@ async function main() {
   console.log('  Creating School B (Londrina)...')
   const B = await buildSchool({
     name: 'Escola Estadual Monteiro Lobato',
+    inepCode: '41152030',
     address: 'Av. Higienópolis, 1200 - Centro, Londrina - PR',
     email: 'contato@eemlobato.pr.edu.br',
     dir:   { name: 'Diretor Sérgio Luiz Magalhães',      email: 'diretor@eemlobato.pr.edu.br'      },

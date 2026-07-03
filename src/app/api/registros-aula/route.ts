@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { getSchoolScope, schoolWhere } from '@/lib/user-context'
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -15,16 +16,12 @@ export async function GET(req: NextRequest) {
 
   const role = (session.user as any).role
   const userId = (session.user as any).id
-  const userEmail = session.user?.email || ''
 
   let andClause: any[] = []
 
-  if (role !== 'ADMIN' && role !== 'DIRETOR') {
-    if (userEmail.includes('eeteixeira')) {
-      andClause.push({ class: { school: { name: { contains: 'Anísio Teixeira' } } } })
-    } else if (userEmail.includes('eemlobato')) {
-      andClause.push({ class: { school: { name: { contains: 'Monteiro Lobato' } } } })
-    }
+  const schoolId = await getSchoolScope(session)
+  if (schoolId) {
+    andClause.push(schoolWhere.classRecord(schoolId))
   }
 
   if (role === 'PROFESSOR') {

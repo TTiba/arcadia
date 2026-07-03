@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import Anthropic from '@anthropic-ai/sdk'
+import { getSchoolScope, schoolWhere } from '@/lib/user-context'
 
 let _client: Anthropic | null = null
 function getClient() {
@@ -14,21 +15,12 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const role = (session.user as any).role
-  const userEmail = session.user?.email || ''
-
-  if (role !== 'ADMIN' && role !== 'DIRETOR') {
-    let schoolWhere = {}
-    if (userEmail.includes('eeteixeira')) {
-      schoolWhere = { class: { school: { name: { contains: 'Anísio Teixeira' } } } }
-    } else if (userEmail.includes('eemlobato')) {
-      schoolWhere = { class: { school: { name: { contains: 'Monteiro Lobato' } } } }
-    }
-
+  const schoolId = await getSchoolScope(session)
+  if (schoolId) {
     const studentExists = await prisma.student.findFirst({
       where: {
         id: params.id,
-        ...schoolWhere
+        ...schoolWhere.student(schoolId),
       }
     })
     if (!studentExists) {
