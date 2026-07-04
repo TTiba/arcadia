@@ -4,6 +4,10 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import Anthropic from '@anthropic-ai/sdk'
 import { getSchoolScope, schoolWhere } from '@/lib/user-context'
+import {
+  buildRoster, scrubText, getOrCreateAlias,
+  remapAliasesForDisplay, containsPiiPatterns,
+} from '@/lib/ai-privacy'
 
 let _client: Anthropic | null = null
 function getClient() {
@@ -11,6 +15,11 @@ function getClient() {
   return _client
 }
 
+// Resumo de ficha com privacidade: o aluno vira um alias (aluno_8391), a
+// turma vira alias, quem registrou vira alias, e o conteúdo das ocorrências
+// passa pelo scrubber (colegas, responsáveis e equipe citados no texto).
+// A resposta é remapeada localmente antes de exibir — a pedagoga continua
+// lendo o nome real; a Anthropic nunca o viu.
 export async function POST(_req: NextRequest, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -37,7 +46,7 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
     include: {
       class: { include: { grade: true } },
       studentLogs: {
-        include: { user: { select: { name: true } } },
+        include: { user: { select: { id: true, name: true, teacher: { select: { id: true } } } } },
         orderBy: { createdAt: 'desc' },
       },
     },
@@ -48,11 +57,30 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
     return NextResponse.json({ summary: 'Nenhum registro encontrado na ficha disciplinar deste aluno.' })
   }
 
+  // Aliases do sujeito e da turma; roster da turma para limpar o texto livre
+  // (colegas e responsáveis costumam ser citados nas ocorrências)
+  const studentAlias = await getOrCreateAlias('ALUNO', student.id)
+  const classAlias = student.classId ? await getOrCreateAlias('TURMA', student.classId) : 'sem turma'
+  const roster = await buildRoster(student.classId ? [student.classId] : [], schoolId)
+
+  const authorAlias = new Map<string, string>()
+  for (const l of student.studentLogs) {
+    if (!authorAlias.has(l.userId)) {
+      authorAlias.set(
+        l.userId,
+        l.user.teacher
+          ? await getOrCreateAlias('PROFESSOR', l.user.teacher.id)
+          : await getOrCreateAlias('USUARIO', l.userId)
+      )
+    }
+  }
+
   const logsText = student.studentLogs.map(l =>
-    `[${new Date(l.createdAt).toLocaleDateString('pt-BR')}] ${l.category} — ${l.user.name}: ${l.content}`
+    `[${new Date(l.createdAt).toLocaleDateString('pt-BR')}] ${l.category} — ${authorAlias.get(l.userId)}: ${scrubText(l.content, roster)}`
   ).join('\n')
 
-  const prompt = `Você é um assistente pedagógico. Abaixo estão os registros da ficha disciplinar do aluno ${student.name} (Turma: ${student.class?.name || 'N/A'}).
+  const prompt = `Você é um assistente pedagógico. Os identificadores no formato aluno_NNNN, turma_NNN e professor_NNN são pseudônimos de privacidade — use-os exatamente como estão, nunca tente adivinhar nomes reais.
+Abaixo estão os registros da ficha disciplinar do aluno ${studentAlias} (turma ${classAlias}).
 
 ${logsText}
 
@@ -62,7 +90,7 @@ Faça um resumo objetivo e estruturado desses registros, destacando:
 - Situações que merecem atenção
 - Recomendações gerais
 
-Seja conciso, direto e use linguagem adequada para um relatório escolar.`
+Refira-se ao aluno sempre como ${studentAlias}. Seja conciso, direto e use linguagem adequada para um relatório escolar.`
 
   try {
     const response = await getClient().messages.create({
@@ -71,7 +99,17 @@ Seja conciso, direto e use linguagem adequada para um relatório escolar.`
       messages: [{ role: 'user', content: prompt }],
     })
 
-    const summary = (response.content[0] as any).text
+    const block = response.content.find(b => b.type === 'text')
+    const raw = block && block.type === 'text' ? block.text : ''
+
+    // Defesa em profundidade: PII na resposta indica vazamento no prompt
+    if (containsPiiPatterns(raw)) {
+      console.error('[ai-summary] padrões de PII detectados na resposta — bloqueado')
+      return NextResponse.json({ error: 'Resumo bloqueado pela verificação de privacidade.' }, { status: 502 })
+    }
+
+    // Mapeamento reverso local: aliases → nomes reais, só para exibição
+    const summary = await remapAliasesForDisplay(raw)
     return NextResponse.json({ summary })
   } catch (err: any) {
     return NextResponse.json({ error: err?.message || 'Erro ao gerar resumo.' }, { status: 500 })

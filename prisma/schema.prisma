@@ -731,6 +731,23 @@ model DashboardBlock {
   @@map("dashboard_blocks")
 }
 
+// ─── Pseudonimização para IA (Fase 1 da arquitetura de privacidade) ──────────
+// Mapeia identificadores reais para aliases artificiais (aluno_8391 etc).
+// Esta tabela NUNCA sai do banco local — sem ela, os aliases são ruído.
+model AiPseudonym {
+  id         String    @id @default(cuid())
+  entityType String    // ALUNO | TURMA | ESCOLA | PROFESSOR | USUARIO
+  realId     String
+  alias      String    @unique
+  active     Boolean   @default(true)
+  createdAt  DateTime  @default(now())
+  rotatedAt  DateTime?
+
+  @@index([entityType, realId, active])
+  @@index([entityType, alias])
+  @@map("ai_pseudonyms")
+}
+
 // ─── Audit Log ────────────────────────────────────────────────────────────────
 
 model AuditLog {
