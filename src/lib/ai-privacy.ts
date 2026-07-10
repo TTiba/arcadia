@@ -218,6 +218,32 @@ function genericFor(replacement: string): string {
   return replacement // marcadores ([RESPONSÁVEL]) já são genéricos
 }
 
+// ─── Menções estruturadas → alias (resolução determinística) ─────────────────
+// Tokens @[Nome|tipo:id] carregam o id real: a troca por alias não depende de
+// casamento de nome. Rode ANTES do scrubText — o que o professor marcou com @
+// é resolvido com precisão; o scrubber heurístico cobre o que ficou sem marca.
+
+const MENTION_TYPE_TO_ENTITY: Record<string, EntityType> = {
+  aluno: 'ALUNO',
+  professor: 'PROFESSOR',
+  usuario: 'USUARIO',
+}
+
+export async function resolveMentionTokens(text: string): Promise<string> {
+  if (!text) return text
+  const re = /@\[([^\]|]+)\|(aluno|professor|usuario):([A-Za-z0-9]+)\]/g
+  const matches = Array.from(text.matchAll(re))
+  if (matches.length === 0) return text
+
+  let out = text
+  for (const m of matches) {
+    const entityType = MENTION_TYPE_TO_ENTITY[m[2]]
+    const alias = await getOrCreateAlias(entityType, m[3])
+    out = out.split(m[0]).join(alias)
+  }
+  return out
+}
+
 // ─── Remapeamento para exibição ───────────────────────────────────────────────
 // A resposta da IA volta com aliases; antes de mostrar ao usuário, trocamos
 // pelos nomes reais — localmente. A Anthropic nunca viu os nomes; o usuário

@@ -44,6 +44,18 @@ async function main() {
   console.log('--- EXIBIÇÃO ---\n' + exibicao)
   if (!exibicao.includes(s1.name)) fail('remap de exibição não recuperou o nome')
 
+  // Menção estruturada: token com id resolve deterministicamente para alias
+  const { makeMentionToken, mentionsToPlainText } = await import('../src/lib/mentions')
+  const { resolveMentionTokens } = await import('../src/lib/ai-privacy')
+  const token = makeMentionToken(s2.name, 'aluno', s2.id)
+  const comMencao = `Conversa com ${token} sobre a entrega.`
+  const resolvido = await resolveMentionTokens(comMencao)
+  console.log('\n--- MENÇÃO ---\n' + comMencao)
+  console.log('--- RESOLVIDO ---\n' + resolvido)
+  if (!/aluno_\d+/.test(resolvido)) fail('menção não virou alias')
+  if (norm(resolvido).includes(norm(s2.name.split(' ')[0]))) fail('nome vazou da menção')
+  if (mentionsToPlainText(comMencao) !== `Conversa com ${s2.name} sobre a entrega.`) fail('render de texto puro incorreto')
+
   console.log('\n' + (process.exitCode ? '✗ TESTE FALHOU' : '✓ TODOS OS CHECKS PASSARAM'))
   await prisma.$disconnect()
 }

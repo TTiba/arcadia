@@ -6,7 +6,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { getSchoolScope, schoolWhere } from '@/lib/user-context'
 import {
   buildRoster, scrubText, getOrCreateAlias,
-  remapAliasesForDisplay, containsPiiPatterns,
+  remapAliasesForDisplay, containsPiiPatterns, resolveMentionTokens,
 } from '@/lib/ai-privacy'
 
 let _client: Anthropic | null = null
@@ -75,9 +75,9 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
     }
   }
 
-  const logsText = student.studentLogs.map(l =>
-    `[${new Date(l.createdAt).toLocaleDateString('pt-BR')}] ${l.category} — ${authorAlias.get(l.userId)}: ${scrubText(l.content, roster)}`
-  ).join('\n')
+  const logsText = (await Promise.all(student.studentLogs.map(async l =>
+    `[${new Date(l.createdAt).toLocaleDateString('pt-BR')}] ${l.category} — ${authorAlias.get(l.userId)}: ${scrubText(await resolveMentionTokens(l.content), roster)}`
+  ))).join('\n')
 
   const prompt = `Você é um assistente pedagógico. Os identificadores no formato aluno_NNNN, turma_NNN e professor_NNN são pseudônimos de privacidade — use-os exatamente como estão, nunca tente adivinhar nomes reais.
 Abaixo estão os registros da ficha disciplinar do aluno ${studentAlias} (turma ${classAlias}).

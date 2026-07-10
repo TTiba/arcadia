@@ -10,6 +10,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
+import { MentionTextarea } from '@/components/mention-textarea'
+import { MentionText } from '@/components/mention-text'
 import { Plus, Search, UserCheck, Eye, ChevronDown, Trash2, Sparkles, Loader2, ChevronUp } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { STATUS_LABELS, formatDate } from '@/lib/utils'
@@ -263,11 +265,11 @@ function FichaDisciplinarTab({ studentId }: { studentId: string }) {
             ))}
           </select>
         </div>
-        <Textarea
-          placeholder="Descreva a ocorrência, reunião, elogio ou observação..."
+        <MentionTextarea
+          placeholder="Descreva a ocorrência, reunião, elogio ou observação… (@ menciona aluno ou colega)"
           rows={3}
           value={content}
-          onChange={e => setContent(e.target.value)}
+          onChange={setContent}
         />
         <div className="flex justify-between items-center">
           <Button
@@ -324,7 +326,7 @@ function FichaDisciplinarTab({ studentId }: { studentId: string }) {
                     </Button>
                   )}
                 </div>
-                <p className="text-sm">{log.content}</p>
+                <p className="text-sm"><MentionText text={log.content} /></p>
               </div>
             )
           })}

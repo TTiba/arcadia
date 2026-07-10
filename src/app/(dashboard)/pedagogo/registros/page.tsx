@@ -8,6 +8,8 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Textarea } from '@/components/ui/textarea'
+import { MentionTextarea } from '@/components/mention-textarea'
+import { MentionText } from '@/components/mention-text'
 import { Plus, Search, Heart, User, Calendar, Lock, X } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { PEDAGOGICAL_RECORD_TYPE_LABELS, formatDate } from '@/lib/utils'
@@ -167,10 +169,10 @@ export default function RegistrosPedagogicosPage() {
                           {r.resolved && <Badge variant="success" className="text-xs">Resolvido</Badge>}
                         </div>
                         <p className="font-medium text-sm">{r.title}</p>
-                        <p className="text-sm text-muted-foreground">{r.content}</p>
+                        <p className="text-sm text-muted-foreground"><MentionText text={r.content} /></p>
                         {r.actionPlan && (
                           <div className="p-2 bg-blue-50 border border-blue-100 rounded text-xs text-blue-800">
-                            <strong>Plano de ação:</strong> {r.actionPlan}
+                            <strong>Plano de ação:</strong> <MentionText text={r.actionPlan} />
                           </div>
                         )}
                       </div>
@@ -228,11 +230,11 @@ export default function RegistrosPedagogicosPage() {
             </div>
             <div className="space-y-2">
               <Label>Conteúdo *</Label>
-              <Textarea rows={4} placeholder="Descreva detalhadamente o registro..." value={form.content} onChange={e => setForm({ ...form, content: e.target.value })} />
+              <MentionTextarea rows={4} placeholder="Descreva detalhadamente o registro… (@ menciona aluno ou colega com vínculo protegido)" value={form.content} onChange={v => setForm({ ...form, content: v })} />
             </div>
             <div className="space-y-2">
               <Label>Plano de ação</Label>
-              <Textarea rows={2} placeholder="Ações previstas para acompanhamento..." value={form.actionPlan} onChange={e => setForm({ ...form, actionPlan: e.target.value })} />
+              <MentionTextarea rows={2} placeholder="Ações previstas para acompanhamento…" value={form.actionPlan} onChange={v => setForm({ ...form, actionPlan: v })} />
             </div>
           </div>
           <DialogFooter>

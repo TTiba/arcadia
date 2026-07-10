@@ -6,8 +6,13 @@ import Anthropic from '@anthropic-ai/sdk'
 import { getSchoolScope } from '@/lib/user-context'
 import {
   buildRoster, scrubText, getOrCreateAlias,
-  remapAliasesForDisplay, containsPiiPatterns,
+  remapAliasesForDisplay, containsPiiPatterns, resolveMentionTokens,
 } from '@/lib/ai-privacy'
+
+// Menções @[Nome|tipo:id] resolvem por id (exato); o scrubber cobre o resto
+async function sanitize(text: string, roster: Awaited<ReturnType<typeof buildRoster>>) {
+  return scrubText(await resolveMentionTokens(text), roster)
+}
 
 let _client: Anthropic | null = null
 function getClient() {
@@ -69,17 +74,17 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const recordsText = records.map(r =>
+  const recordsText = (await Promise.all(records.map(async r =>
     `[${teacherAlias.get(r.teacherId)} - Componente: ${r.subject?.name || 'N/A'}]
-Conteúdo Desenvolvido: ${scrubText(r.contentDeveloped, roster)}
-${r.observations ? `Observações: ${scrubText(r.observations, roster)}` : ''}
-${r.pending ? `Pendências: ${scrubText(r.pending, roster)}` : ''}
-${r.adaptations ? `Adaptações realizadas: ${scrubText(r.adaptations, roster)}` : ''}`
-  ).join('\n\n')
+Conteúdo Desenvolvido: ${await sanitize(r.contentDeveloped, roster)}
+${r.observations ? `Observações: ${await sanitize(r.observations, roster)}` : ''}
+${r.pending ? `Pendências: ${await sanitize(r.pending, roster)}` : ''}
+${r.adaptations ? `Adaptações realizadas: ${await sanitize(r.adaptations, roster)}` : ''}`
+  ))).join('\n\n')
 
   const prompt = `Você é um assistente de inteligência artificial de diário de classe.
 Os identificadores no formato professor_NNN e aluno_NNNN são pseudônimos de privacidade — use-os exatamente como estão, nunca tente adivinhar nomes reais.
-Abaixo estão os registros de outros professores para a aula interdisciplinar "${scrubText(lesson.title, roster)}":
+Abaixo estão os registros de outros professores para a aula interdisciplinar "${await sanitize(lesson.title, roster)}":
 
 ${recordsText}
 

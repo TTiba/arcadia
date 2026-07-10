@@ -7,6 +7,9 @@ import { Label } from '@/components/ui/label'
 import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Textarea } from '@/components/ui/textarea'
+import { MentionTextarea } from '@/components/mention-textarea'
+import { MentionText } from '@/components/mention-text'
+import { mentionsToPlainText } from '@/lib/mentions'
 import { Badge } from '@/components/ui/badge'
 import { Plus, ClipboardList, Users2, Sparkles, ChevronDown, BookOpen } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
@@ -360,24 +363,24 @@ export default function RegistroAulaPage() {
                       </div>
 
                       {/* Conteúdo é o herói do card */}
-                      <p className="text-sm mt-3 leading-relaxed">{r.contentDeveloped}</p>
+                      <p className="text-sm mt-3 leading-relaxed"><MentionText text={r.contentDeveloped} /></p>
 
                       {/* Metadados secundários */}
                       {(r.observations || r.pending || r.adaptations) && (
                         <div className="flex flex-wrap gap-2 mt-3">
                           {r.pending && (
                             <span className="text-xs px-2.5 py-1 rounded-full bg-warning/15 text-foreground">
-                              Pendência: {r.pending}
+                              Pendência: <MentionText text={r.pending} />
                             </span>
                           )}
                           {r.adaptations && (
                             <span className="text-xs px-2.5 py-1 rounded-full bg-muted text-muted-foreground">
-                              Adaptações: {r.adaptations}
+                              Adaptações: <MentionText text={r.adaptations} />
                             </span>
                           )}
                           {r.observations && (
                             <span className="text-xs px-2.5 py-1 rounded-full bg-muted text-muted-foreground">
-                              Obs: {r.observations}
+                              Obs: <MentionText text={r.observations} />
                             </span>
                           )}
                         </div>
@@ -420,8 +423,8 @@ export default function RegistroAulaPage() {
                             {partners.map(p => (
                               <p key={p.id} className="text-xs text-muted-foreground">
                                 <span className="font-medium text-foreground">{p.teacher.user.name}</span>
-                                {p.subject?.name ? ` (${p.subject.name})` : ''}: {p.contentDeveloped.substring(0, 120)}
-                                {p.contentDeveloped.length > 120 ? '…' : ''}
+                                {p.subject?.name ? ` (${p.subject.name})` : ''}: {mentionsToPlainText(p.contentDeveloped).substring(0, 120)}
+                                {mentionsToPlainText(p.contentDeveloped).length > 120 ? '…' : ''}
                               </p>
                             ))}
                           </div>
@@ -536,8 +539,8 @@ export default function RegistroAulaPage() {
                         <span className="font-medium text-foreground">{lr.teacher.user.name}{lr.subject?.name ? ` (${lr.subject.name})` : ''}</span>
                         <span>{formatDate(lr.date)}</span>
                       </div>
-                      <p>{lr.contentDeveloped}</p>
-                      {lr.observations && <p className="text-muted-foreground">Obs: {lr.observations}</p>}
+                      <p><MentionText text={lr.contentDeveloped} /></p>
+                      {lr.observations && <p className="text-muted-foreground">Obs: <MentionText text={lr.observations} /></p>}
                     </div>
                   ))}
                 </div>
@@ -547,12 +550,13 @@ export default function RegistroAulaPage() {
             {/* Campo principal — o que foi trabalhado */}
             <div className="space-y-1.5">
               <Label>O que foi trabalhado na aula? *</Label>
-              <Textarea
+              <MentionTextarea
                 rows={5}
                 autoFocus
-                placeholder="Ex.: Frações equivalentes com material concreto. A turma resolveu a lista 8 em duplas; maioria avançou bem até o exercício 6."
+                classId={form.classId || undefined}
+                placeholder="Ex.: Frações equivalentes com material concreto. Digite @ para mencionar um aluno com vínculo — a menção protege o nome nos recursos de IA."
                 value={form.contentDeveloped}
-                onChange={e => setForm({ ...form, contentDeveloped: e.target.value })}
+                onChange={v => setForm({ ...form, contentDeveloped: v })}
               />
             </div>
 
@@ -565,16 +569,16 @@ export default function RegistroAulaPage() {
               <div className="px-4 pb-4 space-y-4">
                 <div className="space-y-1.5">
                   <Label>Observações</Label>
-                  <Textarea rows={2} placeholder="Observações gerais sobre a aula…" value={form.observations} onChange={e => setForm({ ...form, observations: e.target.value })} />
+                  <MentionTextarea rows={2} classId={form.classId || undefined} placeholder="Observações gerais sobre a aula… (@ menciona um aluno)" value={form.observations} onChange={v => setForm({ ...form, observations: v })} />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <Label>Pendências</Label>
-                    <Textarea rows={2} placeholder="Conteúdos para retomar na próxima aula…" value={form.pending} onChange={e => setForm({ ...form, pending: e.target.value })} />
+                    <MentionTextarea rows={2} classId={form.classId || undefined} placeholder="Conteúdos para retomar na próxima aula…" value={form.pending} onChange={v => setForm({ ...form, pending: v })} />
                   </div>
                   <div className="space-y-1.5">
                     <Label>Adaptações realizadas</Label>
-                    <Textarea rows={2} placeholder="Adaptações para alunos com necessidades específicas…" value={form.adaptations} onChange={e => setForm({ ...form, adaptations: e.target.value })} />
+                    <MentionTextarea rows={2} classId={form.classId || undefined} placeholder="Adaptações para alunos com necessidades específicas… (@ menciona um aluno)" value={form.adaptations} onChange={v => setForm({ ...form, adaptations: v })} />
                   </div>
                 </div>
               </div>

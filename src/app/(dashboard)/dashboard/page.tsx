@@ -9,6 +9,7 @@ import {
   Link as LinkIcon, UserCheck, FileText, Sparkles, ArrowRight, CalendarCheck,
 } from 'lucide-react'
 import { ROLE_LABELS } from '@/lib/utils'
+import { mentionsToPlainText } from '@/lib/mentions'
 import Link from 'next/link'
 
 interface AttentionItem {
@@ -316,7 +317,7 @@ export default async function DashboardPage() {
                         </p>
                         {record.contentDeveloped && (
                           <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
-                            {record.contentDeveloped}
+                            {mentionsToPlainText(record.contentDeveloped)}
                           </p>
                         )}
                       </div>
