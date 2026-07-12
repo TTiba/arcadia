@@ -10,6 +10,7 @@
     "db:generate": "prisma generate",
     "db:push": "prisma db push --accept-data-loss",
     "db:seed": "ts-node -O \"{\\\"module\\\":\\\"CommonJS\\\"}\" prisma/seed.ts",
+    "db:seed:medio": "ts-node --transpile-only -O \"{\\\"module\\\":\\\"CommonJS\\\",\\\"moduleResolution\\\":\\\"node\\\",\\\"target\\\":\\\"ES2020\\\"}\" scripts/seed-ensino-medio.ts",
     "db:setup": "npm run db:generate && npm run db:push && npm run db:seed",
     "prisma": "prisma"
   },
